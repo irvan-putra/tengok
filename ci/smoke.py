@@ -88,6 +88,15 @@ def need(text, exact=False):
     sys.exit(1)
 
 
+def wait_present(text, exact=False, tries=8):
+    # like need() but never swipes: safe while a system dialog may appear
+    for _ in range(tries):
+        if present(text, exact):
+            return True
+        time.sleep(1)
+    return False
+
+
 def back():
     adb("shell", "input", "keyevent", "4")
     time.sleep(1)
@@ -495,13 +504,15 @@ need("tengok-fixtures")
 tap("tengok-fixtures")
 time.sleep(2)
 shot("13b-tree-picker")
-tap("Use this folder")
-time.sleep(1.5)
-if present("Allow"):
-    tap("Allow")
+tap("Use this folder", exact=True)
+if not wait_present("Allow", exact=True):
+    shot("FAILED-tree-confirm")
+    print("EXPECTED ON SCREEN: system allow dialog after USE THIS FOLDER")
+    sys.exit(1)
+tap("Allow", exact=True)
 time.sleep(2.5)
+need("read-only")  # tengok's own footer: proves we left the picker
 need("smoke.mid")
-need("read-only")
 shot("13c-explorer-list")
 tap("smoke.mid")
 time.sleep(2.5)
