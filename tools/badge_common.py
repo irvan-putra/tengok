@@ -3,7 +3,8 @@ import PIL
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 PILLOW_PIN = "12.3.0"
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+# the pinned font travels with the repo so every machine renders identical icons
+FONT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", "DejaVuSans-Bold.ttf")
 FONT_SHA256 = "d1c3ff99f1e1ce1827a33efd4dad81f40babda06bff9e43bd7591c86662a287b"
 DENSITIES = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
 S = 768

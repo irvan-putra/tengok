@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -23,6 +24,8 @@ import java.io.IOException;
  * still fails safe with a readable message and an offer of the hex view.
  */
 public class ViewerActivity extends Activity {
+    private static final String TAG = "tengok";
+
     private Source source;
     private Sniffer.Kind kind;
     private byte[] head;
@@ -180,23 +183,54 @@ public class ViewerActivity extends Activity {
         sb.append("Shown as: ").append(kind.name().toLowerCase(java.util.Locale.ROOT)).append('\n');
         String declared = getIntent().getType();
         sb.append("Declared type: ").append(declared == null ? "none" : declared).append('\n');
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("File details")
-                .setMessage(sb + "\nSHA-256: computing…")
-                .setPositiveButton("Close", null)
-                .show();
+        // The dialog and the background hash both run far from the file parser;
+        // any failure here must degrade to a readable note, never a crash.
+        Log.i(TAG, "TENGOK-DETAILS-OPEN");
+        final AlertDialog dialog;
+        try {
+            dialog = new AlertDialog.Builder(this)
+                    .setTitle("File details")
+                    .setMessage(sb + "\nSHA-256: computing…")
+                    .setPositiveButton("Close", null)
+                    .show();
+        } catch (RuntimeException e) {
+            Log.e(TAG, "TENGOK-DETAILS-ERR dialog: " + e.getClass().getSimpleName());
+            android.widget.Toast.makeText(this, sb.toString(),
+                    android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
         TextView msg = dialog.findViewById(android.R.id.message);
-        if (msg != null) msg.setTextIsSelectable(true);
+        if (msg != null) {
+            try {
+                msg.setTextIsSelectable(true);
+            } catch (RuntimeException e) {
+                Log.e(TAG, "TENGOK-DETAILS-ERR selectable: " + e.getClass().getSimpleName());
+            }
+        }
         new Thread(() -> {
             String hash;
             try {
+                if (BuildConfig.DEBUG && getIntent().getBooleanExtra("fail_details_hash", false)) {
+                    throw new SecurityException("simulated grant failure");
+                }
                 hash = Meta.sha256(source);
-            } catch (IOException e) {
-                hash = "could not read: " + e.getMessage();
+            } catch (Throwable t) {
+                // includes SecurityException from a lapsed content grant; an
+                // uncaught throw on this thread would kill the app
+                hash = "couldn't compute (" + t.getClass().getSimpleName() + ")";
+                Log.e(TAG, "TENGOK-DETAILS-ERR hash: " + t.getClass().getSimpleName());
             }
             String h = hash;
             runOnUiThread(() -> {
-                if (dialog.isShowing()) dialog.setMessage(sb + "\nSHA-256:\n" + h);
+                if (isFinishing() || isDestroyed()) return;
+                try {
+                    if (dialog.isShowing()) {
+                        dialog.setMessage(sb + "\nSHA-256:\n" + h);
+                        Log.i(TAG, "TENGOK-DETAILS-OK");
+                    }
+                } catch (RuntimeException e) {
+                    Log.e(TAG, "TENGOK-DETAILS-ERR update: " + e.getClass().getSimpleName());
+                }
             });
         }).start();
     }
