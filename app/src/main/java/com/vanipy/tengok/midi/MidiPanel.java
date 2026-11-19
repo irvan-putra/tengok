@@ -258,7 +258,7 @@ public class MidiPanel {
         int sx = rollScroll.getScrollX();
         if (x < sx + vw * 0.10f || x > sx + vw * 0.66f) {
             int target = Math.max(0, (int) (x - vw * 0.33f));
-            Log.i(TAG, "TENGOK-MIDI-FOLLOW scrollX=" + target);
+            Log.i(TAG, "TENGOK-MIDI-FOLLOW sx=" + target + " cx=" + (int) x + " vw=" + vw);
             rollScroll.smoothScrollTo(target, 0);
         }
     }

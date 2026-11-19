@@ -34,10 +34,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK=$(find app/build/outputs/apk/debug -name 'tengok-v0.1.0-debug.apk' -type f | head -1)
-          test -n "$APK"
+          VER=$(sed -n 's/^val appVersionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          CODE=$(sed -n 's/^val appVersionCode = \(.*\)/\1/p' app/build.gradle.kts)
+          APK="app/build/outputs/apk/debug/tengok-v${VER}-debug.apk"
+          test -f "$APK"
+          find app/build/outputs/apk/debug -type f -name '*.apk'
           AAPT=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)
-          "$AAPT" dump badging "$APK" | grep -F "package: name='com.vanipy.tengok' versionCode='1' versionName='0.1.0'"
+          "$AAPT" dump badging "$APK" | grep -F "package: name='com.vanipy.tengok' versionCode='${CODE}' versionName='${VER}'"
           if "$AAPT" dump permissions "$APK" | grep -q 'uses-permission'; then echo "unexpected permission"; "$AAPT" dump permissions "$APK"; exit 1; fi
       - uses: actions/upload-artifact@v4
         with:

@@ -8,7 +8,10 @@ if [ -n "${RELEASE_TAG:-}" ]; then
   (cd /tmp/rel && sha256sum -c ./*.sha256)
   adb install -r /tmp/rel/tengok-v*.apk
 else
-  adb install -r app/build/outputs/apk/debug/tengok-v*-debug.apk
+  VER=$(sed -n 's/^val appVersionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+  APK="app/build/outputs/apk/debug/tengok-v${VER}-debug.apk"
+  test -f "$APK"
+  adb install -r "$APK"
 fi
 # independent fixture: a MIDI file this repo's Python writes, delivered through a real VIEW intent
 python3 ci/make_midi.py /tmp/smoke.mid
