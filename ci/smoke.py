@@ -374,7 +374,7 @@ shot("12c-crash-card")
 # the same events must be in the on-device diagnostic log (debug build: run-as)
 time.sleep(1)
 log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
-for wanted in ("APP-START version", "VIEW kind=midi", "CRASH java.lang.IllegalStateException"):
+for wanted in ("APP-START version", "VIEW kind=midi", "CRASH java.lang.RuntimeException", "tengok debug crash test"):
     if wanted not in log:
         print("EXPECTED IN diag.log:", wanted)
         print(log[-2000:])
