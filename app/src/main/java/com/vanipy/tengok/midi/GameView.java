@@ -40,8 +40,6 @@ public final class GameView extends View {
     private int loPitch = 48;
     private int hiPitch = 72;
     private double nowMs;
-    private double pxPerSec;
-    private int keyboardH;
     private int keysLoggedW = -1;
     private int keysLoggedH = -1;
     private int keysLoggedX = -1;
@@ -90,12 +88,17 @@ public final class GameView extends View {
         return c;
     }
 
+    /** Keyboard strip height, always derived from the current laid-out height. */
+    private int keyboardH() {
+        return (int) (getHeight() * 0.18f);
+    }
+
     /** Horizontal rect of a key, in view coordinates. */
     RectF keyRect(int pitch) {
         int w = getWidth();
         int whiteCount = whitesUpTo(loPitch, hiPitch);
         float whiteW = (float) w / whiteCount;
-        float top = getHeight() - keyboardH;
+        float top = getHeight() - keyboardH();
         if (!isBlack(pitch)) {
             int idx = whitesUpTo(loPitch, pitch) - 1;
             return new RectF(idx * whiteW, top, (idx + 1) * whiteW, getHeight());
@@ -104,16 +107,13 @@ public final class GameView extends View {
         int before = whitesUpTo(loPitch, pitch - 1);
         float cx = before * whiteW;
         float bw = whiteW * 0.62f;
-        return new RectF(cx - bw / 2, top, cx + bw / 2, top + keyboardH * 0.6f);
+        return new RectF(cx - bw / 2, top, cx + bw / 2, top + keyboardH() * 0.6f);
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int w = MeasureSpec.getSize(widthMeasureSpec);
-        int h = MeasureSpec.getSize(heightMeasureSpec);
-        keyboardH = (int) (h * 0.18f);
-        pxPerSec = (h - keyboardH) / 3.0; // ~3 seconds of lookahead
-        setMeasuredDimension(w, h);
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec),
+                MeasureSpec.getSize(heightMeasureSpec));
     }
 
     @Override
@@ -121,7 +121,9 @@ public final class GameView extends View {
         super.onDraw(canvas);
         int w = getWidth();
         int h = getHeight();
-        float hitY = h - keyboardH;
+        int kb = keyboardH();
+        float hitY = h - kb;
+        double pxPerSec = (h - kb) / 3.0; // ~3 seconds of lookahead
 
         paint.setColor(0xFFFBFBFE);
         canvas.drawRect(0, 0, w, h, paint);
@@ -180,6 +182,10 @@ public final class GameView extends View {
                         .append((int) (loc[0] + kr.right)).append(',')
                         .append((int) (loc[1] + (kr.top + kr.bottom) / 2));
             }
+            sb.append(" | w=").append(w).append(" h=").append(h)
+                    .append(" loc=").append(loc[0]).append(',').append(loc[1])
+                    .append(" kb=").append(keyboardH())
+                    .append(" lo=").append(loPitch).append(" hi=").append(hiPitch);
             Log.i(TAG, sb.toString());
         }
     }
@@ -189,7 +195,7 @@ public final class GameView extends View {
         if (e.getAction() != MotionEvent.ACTION_DOWN) return true;
         float x = e.getX();
         float y = e.getY();
-        if (y < getHeight() - keyboardH) return true;
+        if (y < getHeight() - keyboardH()) return true;
         // black keys win over whites where they overlap
         for (int p = loPitch; p <= hiPitch; p++) {
             if (!isBlack(p)) continue;
