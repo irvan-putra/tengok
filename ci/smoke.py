@@ -186,9 +186,12 @@ shot("10-image")
 back()
 
 # ---- details sheet over a real VIEW intent with an independent file ----
-adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
-    "-t", "audio/midi",
-    "-d", f"file:///data/data/{PKG}/files/smoke.mid")
+r = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity",
+        "-a", "android.intent.action.VIEW",
+        "-t", "audio/midi",
+        "-d", f"file:///data/data/{PKG}/files/smoke.mid")
+print("am start VIEW:", r.stdout.decode("utf-8", "replace").strip(),
+      r.stderr.decode("utf-8", "replace").strip())
 time.sleep(2.5)
 need("MIDI format 1")
 need("Violin")
