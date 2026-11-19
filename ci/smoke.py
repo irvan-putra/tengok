@@ -189,7 +189,7 @@ back()
 for test_uri in (f"file:///data/data/{PKG}/files/smoke.mid",
                  "file:///sdcard/Download/smoke.mid",
                  "content://media/external/file/1"):
-    rr = adb("shell", "cmd", "package", "query-intent-activities", "--brief",
+    rr = adb("shell", "pm", "query-intent-activities", "--brief",
              "-a", "android.intent.action.VIEW", "-t", "audio/midi",
              "-d", test_uri)
     print("RESOLVER", test_uri, "->",
@@ -212,11 +212,27 @@ rr = adb("shell", "am", "start",
 print("am start implicit content VIEW:",
       rr.stdout.decode("utf-8", "replace").strip(),
       rr.stderr.decode("utf-8", "replace").strip())
-time.sleep(2.5)
-if not present("MIDI format 1") and present("tengok"):
-    tap("tengok")  # system chooser: pick tengok the way a user would
-    time.sleep(2)
-need("MIDI format 1")
+# watch up to 8s: either the file opens directly, or the system chooser
+# appears and we pick tengok in it the way a user would. No swipes in this
+# loop - a downward swipe would dismiss the bottom-sheet chooser.
+opened = False
+for _ in range(8):
+    time.sleep(1)
+    if present("MIDI format 1"):
+        opened = True
+        break
+    n = find("tengok", exact=True)
+    if n:
+        x, y = center(n["bounds"])
+        adb("shell", "input", "tap", str(x), str(y))
+        time.sleep(2)
+        if present("MIDI format 1"):
+            opened = True
+            break
+if not opened:
+    shot("FAILED-implicit-view-state")
+    print("EXPECTED ON SCREEN: MIDI format 1 (implicit content VIEW route)")
+    sys.exit(1)
 need("Violin")
 need("melody")
 shot("11-implicit-content-view")
