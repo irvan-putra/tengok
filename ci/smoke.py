@@ -185,6 +185,57 @@ if not all(0 <= cx - sx <= vw for sx, cx, vw in follows):
     print("playhead placed outside the viewport:", follows)
     sys.exit(1)
 shot("05b-midi-follow")
+
+# ---- game mode: falling notes, wait-for-me freeze, tap the right key ----
+tap("Game", exact=True)
+ready = None
+keymap = {}
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.search(r"TENGOK-GAME-READY track=(\d+)", out)
+    keys = re.findall(r"TENGOK-GAME-KEYS((?: \d+:\d+,\d+,\d+)+)", out)
+    if keys:
+        for mm in re.finditer(r"(\d+):(\d+),(\d+),(\d+)", keys[-1]):
+            keymap[int(mm.group(1))] = ((int(mm.group(2)) + int(mm.group(3))) // 2, int(mm.group(4)))
+    if m:
+        ready = m.group(1)
+        if keymap:
+            break
+    time.sleep(0.5)
+if ready is None or not keymap:
+    shot("FAILED-midi-game")
+    print("game never became ready or keyboard geometry missing:", ready, len(keymap))
+    sys.exit(1)
+print("game ready, track", ready, "keys:", len(keymap))
+tap("wait for me: off", exact=True)  # toggles wait mode ON
+adb("shell", "logcat", "-c")
+tap("play", exact=True)
+pitch = None
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.search(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
+    if m:
+        pitch = int(m.group(1))
+        break
+    time.sleep(0.5)
+if pitch is None or pitch not in keymap:
+    shot("FAILED-midi-game")
+    print("game never waited for the first note, pitch:", pitch)
+    sys.exit(1)
+x, y = keymap[pitch]
+adb("shell", "input", "tap", str(x), str(y))
+time.sleep(1.2)
+out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
+if not any(int(p_) == pitch and int(g) in (1, 2) for p_, g in strikes):
+    shot("FAILED-midi-game")
+    print("tap on the waiting key did not score:", pitch, strikes)
+    sys.exit(1)
+print("game strike scored on the frozen note:", strikes)
+need("perfect 1")
+shot("05c-midi-game")
+tap("exit game", exact=True)
+need("MIDI format 0")
 back()
 
 # ---- corrupt MIDI fails with a readable error, hex offered ----

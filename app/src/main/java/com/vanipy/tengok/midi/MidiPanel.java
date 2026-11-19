@@ -16,6 +16,9 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.vanipy.tengok.Source;
 import com.vanipy.tengok.Ui;
 
@@ -44,6 +47,7 @@ public class MidiPanel {
     private Button playButton;
     private boolean prepared;
     private boolean released;
+    private GameController game;
 
     private final Runnable ticker = new Runnable() {
         @Override
@@ -132,6 +136,13 @@ public class MidiPanel {
         playButton.setEnabled(false);
         playButton.setOnClickListener(v -> togglePlay());
         row.addView(playButton);
+        if (!midi.smpte && !midi.notes.isEmpty()) {
+            Button gameButton = new Button(ctx);
+            gameButton.setText("Game");
+            gameButton.setOnClickListener(v -> startGame());
+            row.addView(gameButton, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
         clock = new TextView(ctx);
         clock.setText("0:00 / " + fmtTime(midi.durationSeconds));
         clock.setPadding(24, 0, 0, 0);
@@ -187,6 +198,73 @@ public class MidiPanel {
             }
         }
         return sb.toString();
+    }
+
+    /** Default "your part": the note-bearing track with the highest average pitch (the melody). */
+    private int defaultUserTrack() {
+        int best = -1;
+        double bestAvg = -1;
+        for (MidiFile.Track t : midi.tracks) {
+            if (t.noteCount == 0) continue;
+            double sum = 0;
+            for (MidiFile.Note n : midi.notes) if (n.track == t.index) sum += n.pitch;
+            double avg = sum / t.noteCount;
+            if (avg > bestAvg) {
+                bestAvg = avg;
+                best = t.index;
+            }
+        }
+        return best;
+    }
+
+    private void startGame() {
+        List<Integer> playable = new ArrayList<>();
+        for (MidiFile.Track t : midi.tracks) if (t.noteCount > 0) playable.add(t.index);
+        if (playable.isEmpty()) return;
+        if (playable.size() == 1) {
+            launchGame(playable.get(0));
+            return;
+        }
+        String[] names = new String[playable.size()];
+        for (int i = 0; i < playable.size(); i++) {
+            MidiFile.Track t = midi.tracks.get(playable.get(i));
+            names[i] = "Track " + (t.index + 1) + (t.name.isEmpty() ? "" : " · " + t.name)
+                    + " (" + t.noteCount + " notes)";
+        }
+        int suggested = playable.indexOf(defaultUserTrack());
+        new android.app.AlertDialog.Builder(ctx)
+                .setTitle("Which part do you want to play?")
+                .setSingleChoiceItems(names, suggested, (d, which) -> {
+                    d.dismiss();
+                    launchGame(playable.get(which));
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void launchGame(int track) {
+        if (player != null && prepared) {
+            try { if (player.isPlaying()) player.pause(); } catch (IllegalStateException ignored) { }
+        }
+        game = new GameController(ctx, midi, track, this::exitGame);
+        root.removeAllViews();
+        root.addView(game.view());
+        game.start();
+    }
+
+    private void exitGame() {
+        if (game != null) {
+            game.release();
+            game = null;
+        }
+        // rebuild the viewer cards into the same container
+        root.removeAllViews();
+        LinearLayout rebuilt = build();
+        while (rebuilt.getChildCount() > 0) {
+            View child = rebuilt.getChildAt(0);
+            rebuilt.removeView(child);
+            root.addView(child);
+        }
     }
 
     private void preparePlayer() {
@@ -277,6 +355,10 @@ public class MidiPanel {
 
     public void release() {
         released = true;
+        if (game != null) {
+            game.release();
+            game = null;
+        }
         handler.removeCallbacks(ticker);
         if (player != null) {
             try {

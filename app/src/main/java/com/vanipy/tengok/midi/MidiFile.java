@@ -57,6 +57,20 @@ public final class MidiFile {
         }
     }
 
+    /** A channel-mode event (program change, control change, pitch bend, pressure)
+     *  kept verbatim so a filtered copy of the song can be re-written losslessly. */
+    public static final class ChannelEvent {
+        public long tick;
+        public int track;
+        public byte[] bytes; // status byte followed by its data bytes
+
+        ChannelEvent(long tick, int track, byte[] bytes) {
+            this.tick = tick;
+            this.track = track;
+            this.bytes = bytes;
+        }
+    }
+
     public int format;
     public int ticksPerQuarter = 480;
     public boolean smpte;
@@ -66,6 +80,7 @@ public final class MidiFile {
     public String keySig = "";
     public final List<TempoChange> tempos = new ArrayList<>();
     public final List<Note> notes = new ArrayList<>();
+    public final List<ChannelEvent> channelEvents = new ArrayList<>();
     public final List<Track> tracks = new ArrayList<>();
     public long durationTicks;
     public double durationSeconds;
@@ -228,21 +243,29 @@ public final class MidiFile {
                         }
                         case 0xA0:
                         case 0xB0:
-                        case 0xE0:
-                            tr.u8();
-                            tr.u8();
+                        case 0xE0: {
+                            int d1 = tr.u8();
+                            int d2 = tr.u8();
+                            channelEvents.add(new ChannelEvent(tick, index,
+                                    new byte[]{(byte) b, (byte) d1, (byte) d2}));
                             track.channels[ch] = true;
                             break;
+                        }
                         case 0xC0: {
                             int program = tr.u8();
+                            channelEvents.add(new ChannelEvent(tick, index,
+                                    new byte[]{(byte) b, (byte) program}));
                             track.channels[ch] = true;
                             if (!track.programs.contains(program)) track.programs.add(program);
                             break;
                         }
-                        case 0xD0:
-                            tr.u8();
+                        case 0xD0: {
+                            int d1 = tr.u8();
+                            channelEvents.add(new ChannelEvent(tick, index,
+                                    new byte[]{(byte) b, (byte) d1}));
                             track.channels[ch] = true;
                             break;
+                        }
                         default:
                             throw new ParseException("unknown event byte 0x" + Integer.toHexString(b));
                     }

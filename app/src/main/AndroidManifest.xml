@@ -4,6 +4,13 @@
     <!-- tengok asks for no permissions at all. Files arrive through the
          system picker or from other apps, and never leave the phone. -->
 
+    <!-- Optional hardware: game mode can hear a USB MIDI keyboard through
+         the system MIDI service. Not required - nothing else changes, and
+         phones without MIDI support keep every other feature. Neither
+         feature needs a runtime permission. -->
+    <uses-feature android:name="android.software.midi" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
     <application
         android:label="tengok"
         android:icon="@mipmap/ic_launcher"
