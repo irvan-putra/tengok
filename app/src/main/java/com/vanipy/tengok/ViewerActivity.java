@@ -100,7 +100,7 @@ public class ViewerActivity extends Activity {
         String declared = getIntent().getType();
         kind = Sniffer.sniff(source.name, declared, head);
         DiagLog.log(this, "VIEW kind=" + kind.name().toLowerCase(java.util.Locale.ROOT)
-                + " name=" + source.name + " size=" + source.size
+                + " size=" + source.size
                 + " declared=" + (declared == null ? "none" : declared)
                 + " scheme=" + (source.uri() == null ? "file" : source.uri().getScheme()));
         showKind(kind);
