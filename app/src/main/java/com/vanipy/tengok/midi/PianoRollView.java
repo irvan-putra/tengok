@@ -106,6 +106,8 @@ public class PianoRollView extends View {
             float y1 = top + (maxPitch - n.pitch + 1) * rowH;
             float y0 = y1 - rowH + 1;
             paint.setColor(CHANNEL_COLORS[n.channel & 15]);
+            // velocity = dynamics: soft notes stay faint, loud notes solid; never invisible
+            paint.setAlpha(80 + (n.velocity * 175 / 127));
             rect.set(x0, y0, x1, y1 - 1);
             canvas.drawRoundRect(rect, rowH * 0.3f, rowH * 0.3f, paint);
         }
