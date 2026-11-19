@@ -300,7 +300,9 @@ adb("shell", "am", "force-stop", PKG)
 time.sleep(1)
 # ViewerActivity is not exported; route through MainActivity's VIEW handling,
 # which forwards the debug-only failure flag to the viewer
-rr = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity",
+rr = adb("shell", "am", "start",
+         "-a", "android.intent.action.VIEW",
+         "-n", f"{PKG}/.MainActivity",
          "-t", "audio/midi",
          "--ez", "fail_details_hash", "true",
          "-d", f"content://{PKG}.fixtureprovider/smoke.mid")
