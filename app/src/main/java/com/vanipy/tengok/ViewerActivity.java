@@ -29,6 +29,7 @@ public class ViewerActivity extends Activity {
     private Source source;
     private Sniffer.Kind kind;
     private byte[] head;
+    private byte[] buffered;
     private LinearLayout root;
     private FrameLayout content;
     private TextView titleView;
@@ -141,6 +142,7 @@ public class ViewerActivity extends Activity {
             showError("tengok can't read this MIDI file", e.getMessage());
             return;
         }
+        buffered = data;
         midiPanel = new MidiPanel(this, source, midi);
         // the panel wraps its own viewer cards in a ScrollView; the root must
         // stay viewport-sized so game mode can fill exactly the screen
@@ -213,11 +215,18 @@ public class ViewerActivity extends Activity {
                 if (BuildConfig.DEBUG && getIntent().getBooleanExtra("fail_details_hash", false)) {
                     throw new SecurityException("simulated grant failure");
                 }
-                hash = Meta.sha256(source);
+                // Hash the bytes already loaded for viewing when we have them:
+                // a second provider read can be refused while MediaPlayer
+                // holds the same Uri for playback.
+                byte[] b = buffered;
+                hash = b != null ? Meta.sha256(b) : Meta.sha256(source);
             } catch (Throwable t) {
                 // includes SecurityException from a lapsed content grant; an
                 // uncaught throw on this thread would kill the app
-                hash = "couldn't compute (" + t.getClass().getSimpleName() + ")";
+                String detail = t.getMessage() == null ? ""
+                        : ": " + CrashLog.sanitize(t.getMessage());
+                if (detail.length() > 140) detail = detail.substring(0, 140);
+                hash = "couldn't compute (" + t.getClass().getSimpleName() + detail + ")";
                 Log.e(TAG, "TENGOK-DETAILS-ERR hash: " + t.getClass().getSimpleName());
             }
             String h = hash;
