@@ -58,10 +58,12 @@ public final class CrashLog {
      * carry user data. Stack frames use dotted class names, so they survive.
      */
     static String sanitize(String trace) {
+        // paths need at least two segments, so MIME types (audio/midi) and
+        // component names (com.vanipy.tengok/.MainActivity) stay readable
         return trace
                 .replaceAll("content://\\S+", "content://<redacted>")
                 .replaceAll("file://\\S+", "file://<redacted>")
-                .replaceAll("/[\\w.\\-+/%]+", "/<path>");
+                .replaceAll("/[\\w.\\-+/%]+/[\\w.\\-+/%]+", "/<path>");
     }
 
     public static File file(Context ctx) {

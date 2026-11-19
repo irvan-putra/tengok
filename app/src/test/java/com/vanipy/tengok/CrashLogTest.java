@@ -35,4 +35,14 @@ public class CrashLogTest {
         assertTrue(out.contains("String.length()"));
         assertTrue(out.contains("com.vanipy.tengok.ViewerActivity.showDetails(ViewerActivity.java:300)"));
     }
+
+    @Test
+    public void sanitize_keepsMimeTypesAndComponentNames() {
+        String out = CrashLog.sanitize("declared=audio/midi "
+                + "ComponentInfo{com.vanipy.tengok/.MainActivity} "
+                + "/storage/emulated/0/Music/cantina2.mid");
+        assertTrue(out.contains("audio/midi"));
+        assertTrue(out.contains("com.vanipy.tengok/.MainActivity"));
+        assertFalse(out.contains("cantina2.mid"));
+    }
 }
