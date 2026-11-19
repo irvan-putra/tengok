@@ -43,7 +43,19 @@ public class MainActivity extends Activity {
         return null;
     }
 
+    private boolean showingAbout;
+
+    @Override
+    public void onBackPressed() {
+        if (showingAbout) {
+            showHome();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
     private void showHome() {
+        showingAbout = false;
         LinearLayout column = Ui.column(this);
         column.setGravity(Gravity.CENTER_HORIZONTAL);
         column.setPadding(Ui.dp(this, 24), Ui.dp(this, 48), Ui.dp(this, 24), Ui.dp(this, 24));
@@ -104,6 +116,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAbout() {
+        showingAbout = true;
         LinearLayout column = Ui.column(this);
         TextView title = new TextView(this);
         title.setText("What tengok can open");

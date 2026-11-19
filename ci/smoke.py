@@ -113,7 +113,7 @@ tap("What tengok can open")
 need("MIDI music")
 need("Not yet, honestly")
 shot("02-about")
-tap("Back")
+back()
 need("Open a file")
 
 # ---- fixture screen ----
