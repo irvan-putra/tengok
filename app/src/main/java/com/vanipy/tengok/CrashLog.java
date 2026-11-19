@@ -35,7 +35,7 @@ public final class CrashLog {
                 sb.append(fmt.format(new Date())).append('\n');
                 sb.append("version ").append(BuildConfig.VERSION_NAME).append('\n');
                 sb.append("thread ").append(thread.getName()).append('\n');
-                sb.append(sanitize(Log.getStackTraceString(error)));
+                sb.append(DiagLog.scrub(Log.getStackTraceString(error)));
                 try (FileOutputStream out = new FileOutputStream(new File(ctx.getFilesDir(), FILE))) {
                     out.write(sb.toString().getBytes(StandardCharsets.UTF_8));
                 }

@@ -27,8 +27,29 @@ public final class DiagLog {
     private DiagLog() {
     }
 
+    /** The display name of the file currently open: never written to the log. */
+    private static volatile String sensitiveName;
+
+    public static void watch(String displayName) {
+        sensitiveName = displayName;
+    }
+
+    /**
+     * URI/path sanitize plus the watched display name. Provider exception
+     * messages can quote the bare name with no path syntax, so structure
+     * alone cannot catch it.
+     */
+    public static String scrub(String text) {
+        String out = CrashLog.sanitize(text);
+        String n = sensitiveName;
+        if (n != null && n.length() >= 3) {
+            out = out.replace(n, "<file>");
+        }
+        return out;
+    }
+
     public static void log(Context ctx, String event) {
-        append(file(ctx), stamp() + " " + CrashLog.sanitize(event));
+        append(file(ctx), stamp() + " " + scrub(event));
     }
 
     public static String read(Context ctx) {

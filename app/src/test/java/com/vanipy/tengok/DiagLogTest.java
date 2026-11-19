@@ -48,4 +48,22 @@ public class DiagLogTest {
         DiagLog.trim(f);
         assertEquals("one\n", DiagLog.read(f));
     }
+
+    @Test
+    public void scrubRedactsWatchedDisplayNameKeepsMime() {
+        DiagLog.watch("cantina2.mid");
+        String out = DiagLog.scrub("java.io.IOException: cantina2.mid: open failed, declared=audio/midi");
+        assertFalse(out.contains("cantina2.mid"));
+        assertTrue(out.contains("<file>"));
+        assertTrue(out.contains("audio/midi"));
+        DiagLog.watch(null);
+    }
+
+    @Test
+    public void scrubWithoutWatchStillSanitizesPaths() {
+        DiagLog.watch(null);
+        String out = DiagLog.scrub("open failed: /storage/emulated/0/Music/cantina2.mid, audio/midi");
+        assertFalse(out.contains("cantina2.mid"));
+        assertTrue(out.contains("audio/midi"));
+    }
 }

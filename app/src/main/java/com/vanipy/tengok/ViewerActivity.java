@@ -46,6 +46,7 @@ public class ViewerActivity extends Activity {
             return;
         }
         source = uri != null ? Source.forUri(this, uri) : new Source.FileSource(new File(fixturePath));
+        DiagLog.watch(source.name);
 
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -229,7 +230,7 @@ public class ViewerActivity extends Activity {
                 // includes SecurityException from a lapsed content grant; an
                 // uncaught throw on this thread would kill the app
                 String detail = t.getMessage() == null ? ""
-                        : ": " + CrashLog.sanitize(t.getMessage());
+                        : ": " + DiagLog.scrub(t.getMessage());
                 if (detail.length() > 140) detail = detail.substring(0, 140);
                 hash = "couldn't compute (" + t.getClass().getSimpleName() + detail + ")";
                 Log.e(TAG, "TENGOK-DETAILS-ERR hash: " + t.getClass().getSimpleName());
