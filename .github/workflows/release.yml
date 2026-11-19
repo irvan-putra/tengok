@@ -1,0 +1,72 @@
+name: tengok signed release
+
+# Manual only. Builds the release APK, signs it with the tengok key from repository secrets,
+# verifies the signature and package, then publishes a GitHub pre-release with a direct APK link.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_CERT_SHA256: "439CF71776000DCB04E32A197AD0BC1FD084B78DC329224201EC2A1845E9B8EE9"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x ./gradlew
+      - name: Read version
+        id: v
+        run: |
+          VER=$(sed -n 's/^val appVersionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          test -n "$VER"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Build and sign
+        env:
+          TENGOK_KEYSTORE_B64: ${{ secrets.TENGOK_KEYSTORE_B64 }}
+          TENGOK_STORE_PASSWORD: ${{ secrets.TENGOK_STORE_PASSWORD }}
+          TENGOK_KEY_ALIAS: ${{ secrets.TENGOK_KEY_ALIAS }}
+          TENGOK_KEY_PASSWORD: ${{ secrets.TENGOK_KEY_PASSWORD }}
+        run: |
+          echo "$TENGOK_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/tengok.jks"
+          export TENGOK_KEYSTORE_FILE="$RUNNER_TEMP/tengok.jks"
+          ./gradlew --no-daemon assembleRelease
+          rm -f "$RUNNER_TEMP/tengok.jks"
+      - name: Verify signature, package and permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${{ steps.v.outputs.version }}"
+          APK="app/build/outputs/apk/release/tengok-v${VER}-release.apk"
+          test -f "$APK"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
+          GOT=$(grep -m1 'certificate SHA-256 digest' /tmp/cert.txt | awk '{print toupper($NF)}')
+          test "$GOT" = "$EXPECTED_CERT_SHA256"
+          "$BT/aapt" dump badging "$APK" | grep -F "package: name='com.vanipy.tengok'"
+          "$BT/aapt" dump badging "$APK" | grep -F "versionName='${VER}'"
+          if "$BT/aapt" dump permissions "$APK" | grep -q 'uses-permission'; then exit 1; fi
+          cp "$APK" "tengok-v${VER}.apk"
+          sha256sum "tengok-v${VER}.apk" | tee "tengok-v${VER}.apk.sha256"
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${{ steps.v.outputs.version }}"
+          cat > notes.md <<NOTES
+          tengok ${VER}: peek into any file. MIDI songs show their summary, instruments and a piano roll and play on the phone's built-in synth; images zoom; audio plays; text reads; everything else opens in a paged hex view with a details sheet (type, size, SHA-256). Offline, no accounts, zero Android permissions, files never leave the phone.
+
+          Signed with the tengok key (certificate SHA-256 ${EXPECTED_CERT_SHA256}).
+          SHA-256 of the APK is in the attached .sha256 file.
+          NOTES
+          gh release create "v${VER}" "tengok-v${VER}.apk" "tengok-v${VER}.apk.sha256" \
+            --title "tengok ${VER}" --notes-file notes.md --prerelease --target "${GITHUB_SHA}"

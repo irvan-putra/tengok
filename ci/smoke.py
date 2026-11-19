@@ -1,0 +1,221 @@
+"""Synthetic-data smoke test for tengok on an emulator.
+
+Drives the real UI over adb and saves screenshots into ci/shots. Covers:
+home, the fixture viewers (MIDI scale, two-track song, corrupt MIDI, text,
+hex, painted image), playback with an advancing position, the details sheet,
+the SAF picker opening, and a real VIEW intent carrying an independently
+generated MIDI file.
+"""
+import re, subprocess, sys, time
+import xml.etree.ElementTree as ET
+
+PKG = "com.vanipy.tengok"
+OUT = "ci/shots"
+subprocess.run(["mkdir", "-p", OUT])
+
+
+def adb(*a, **k):
+    return subprocess.run(["adb", *a], capture_output=True, **k)
+
+
+def shot(name):
+    time.sleep(1.0)
+    data = adb("exec-out", "screencap", "-p").stdout
+    open(f"{OUT}/{name}.png", "wb").write(data)
+
+
+def nodes():
+    last = ""
+    for _ in range(5):
+        adb("shell", "rm", "-f", "/sdcard/ui.xml")
+        dump = adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+        raw = adb("exec-out", "cat", "/sdcard/ui.xml")
+        xml = raw.stdout.decode("utf-8", "replace")
+        try:
+            if dump.returncode or raw.returncode:
+                raise ET.ParseError("UI dump command failed")
+            return [n.attrib for n in ET.fromstring(xml).iter("node")]
+        except ET.ParseError:
+            last = repr(xml) + "\n" + dump.stdout.decode("utf-8", "replace") + dump.stderr.decode("utf-8", "replace")
+            time.sleep(1)
+    open(f"{OUT}/ui-dump-failure.txt", "w").write(last)
+    shot("FAILED-ui-dump")
+    raise RuntimeError("No valid UIAutomator XML after five attempts; raw diagnostic saved")
+
+
+def center(b):
+    m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", b)
+    x1, y1, x2, y2 = map(int, m.groups())
+    return (x1 + x2) // 2, (y1 + y2) // 2
+
+
+def find(text, exact=False):
+    for n in nodes():
+        t = ((n.get("text") or "") + " " + (n.get("content-desc") or "")).strip().lower()
+        if (t == text.lower()) if exact else (text.lower() in t):
+            return n
+    return None
+
+
+def present(text, exact=False):
+    return find(text, exact) is not None
+
+
+def tap(text, exact=False, tries=6):
+    for _ in range(tries):
+        n = find(text, exact)
+        if n:
+            x, y = center(n["bounds"])
+            adb("shell", "input", "tap", str(x), str(y))
+            time.sleep(0.8)
+            return
+        adb("shell", "input", "swipe", "540", "1700", "540", "700", "300")
+        time.sleep(1)
+    shot("FAILED-" + re.sub(r"\W+", "_", text)[:30])
+    print("NOT FOUND:", text)
+    sys.exit(1)
+
+
+def need(text, exact=False):
+    for i in range(6):
+        if present(text, exact):
+            return
+        if i >= 2:
+            adb("shell", "input", "swipe", "540", "700", "540", "1800", "300")
+        time.sleep(1)
+    shot("FAILED-need-" + re.sub(r"\W+", "_", text)[:30])
+    print("EXPECTED ON SCREEN:", text)
+    sys.exit(1)
+
+
+def back():
+    adb("shell", "input", "keyevent", "4")
+    time.sleep(1)
+
+
+def logcat_has(marker):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    return marker in out
+
+
+adb("shell", "logcat", "-c")
+adb("shell", "pm", "clear", PKG)
+
+# ---- home ----
+adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+time.sleep(2)
+need("Open a file")
+need("no permissions")
+shot("01-home")
+
+# ---- about / honest limits ----
+tap("What tengok can open")
+need("MIDI music")
+need("Not yet, honestly")
+shot("02-about")
+tap("Back")
+need("Open a file")
+
+# ---- fixture screen ----
+adb("shell", "am", "start", "-n", f"{PKG}/.FixtureActivity")
+time.sleep(2)
+need("MIDI: C major scale")
+
+# ---- MIDI scale: summary, instrument, piano roll, playback ----
+tap("MIDI: C major scale")
+need("MIDI format 0")
+need("Acoustic Grand Piano")
+need("8 notes")
+shot("03-midi-scale")
+need("Plays on this phone")
+tap("Play", exact=True)
+time.sleep(2.5)
+if not logcat_has("TENGOK-MIDI-PLAYING"):
+    shot("FAILED-midi-play")
+    print("MIDI playback did not start (no TENGOK-MIDI-PLAYING marker)")
+    sys.exit(1)
+positions = re.findall(r"TENGOK-MIDI-POS ms=(\d+)",
+                       adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
+positions = [int(p) for p in positions]
+if len(positions) < 2 or positions[-1] <= positions[0]:
+    shot("FAILED-midi-progress")
+    print("MIDI position did not advance:", positions)
+    sys.exit(1)
+print("MIDI positions:", positions)
+shot("04-midi-playing")
+back()
+
+# ---- two-track song with a tempo change ----
+tap("MIDI: two-track song, tempo change")
+need("MIDI format 1")
+need("120 bpm then 60 bpm")
+need("Violin")
+need("Acoustic Bass")
+shot("05-midi-song")
+back()
+
+# ---- corrupt MIDI fails with a readable error, hex offered ----
+tap("MIDI: corrupt file")
+need("can't read this MIDI file")
+need("Show as hex instead")
+shot("06-midi-corrupt")
+tap("Show as hex instead")
+need("hex view")
+need("4d 54 68 64")  # the corrupt file really shows its MThd bytes
+shot("07-corrupt-hex")
+back()
+
+# ---- text ----
+tap("Text: hello")
+need("UTF-8")
+need("quick brown fox")
+shot("08-text")
+back()
+
+# ---- hex with paging ----
+tap("Hex: random blob")
+need("hex view")
+need("page 1 / 1")
+shot("09-hex")
+back()
+
+# ---- image ----
+tap("Image: painted PNG")
+need("480 × 320")
+shot("10-image")
+back()
+
+# ---- details sheet over a real VIEW intent with an independent file ----
+adb("shell", "am", "start", "-a", "android.intent.action.VIEW",
+    "-t", "audio/midi",
+    "-d", f"file:///data/data/{PKG}/files/smoke.mid")
+time.sleep(2.5)
+need("MIDI format 1")
+need("Violin")
+need("melody")
+shot("11-view-intent-independent-midi")
+tap("Details")
+time.sleep(2.5)
+need("SHA-256")
+need("audio/midi")
+shot("12-details")
+adb("shell", "input", "keyevent", "4")  # close dialog
+time.sleep(1)
+back()
+
+# ---- SAF picker opens from home ----
+adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+time.sleep(2)
+tap("Open a file")
+time.sleep(2)
+shot("13-saf-picker")
+back()
+
+# ---- launcher icon ----
+adb("shell", "input", "keyevent", "3")
+time.sleep(2)
+adb("shell", "input", "swipe", "540", "1900", "540", "600", "300")
+time.sleep(2)
+shot("14-launcher")
+
+print("SMOKE OK")
