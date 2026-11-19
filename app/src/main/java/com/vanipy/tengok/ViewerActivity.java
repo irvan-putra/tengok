@@ -210,6 +210,9 @@ public class ViewerActivity extends Activity {
         new Thread(() -> {
             String hash;
             try {
+                if (BuildConfig.DEBUG && getIntent().getBooleanExtra("fail_details_hash", false)) {
+                    throw new SecurityException("simulated grant failure");
+                }
                 hash = Meta.sha256(source);
             } catch (Throwable t) {
                 // includes SecurityException from a lapsed content grant; an

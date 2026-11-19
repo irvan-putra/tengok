@@ -364,6 +364,30 @@ adb("shell", "input", "keyevent", "4")  # close dialog
 time.sleep(1)
 back()
 
+# ---- Details must survive a runtime failure on the hash re-read ----
+# Phone report: tapping Details killed the app on a big multi-track file.
+# The hardening is exercised by forcing a SecurityException on the re-read;
+# the dialog must show the failure text and the app must stay alive.
+adb("shell", "am", "force-stop", PKG)
+time.sleep(1)
+rr = adb("shell", "am", "start", "-n", f"{PKG}/.ViewerActivity",
+         "-t", "audio/midi",
+         "--ez", "fail_details_hash", "true",
+         "-d", f"content://{PKG}.fixtureprovider/smoke.mid")
+print("am start viewer fail_details_hash:", rr.stdout.decode("utf-8", "replace").strip(),
+      rr.stderr.decode("utf-8", "replace").strip())
+time.sleep(2.5)
+need("MIDI format 1")
+tap("Details")
+time.sleep(2.5)
+need("File details")
+need("couldn't compute (SecurityException)")
+need("MIDI format 1")  # viewer still alive behind the dialog
+shot("12b-details-hash-failure")
+adb("shell", "input", "keyevent", "4")  # close dialog
+time.sleep(1)
+back()
+
 # ---- SAF picker opens from home ----
 # force-stop for a clean, deterministic task state after the intent chains
 adb("shell", "am", "force-stop", PKG)
