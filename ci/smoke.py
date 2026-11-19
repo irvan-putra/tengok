@@ -513,6 +513,7 @@ tap("Allow", exact=True)
 time.sleep(2.5)
 need("read-only")  # tengok's own footer: proves we left the picker
 need("smoke.mid")
+need("tengok-fixtures")  # title bar shows the real folder name
 shot("13c-explorer-list")
 tap("smoke.mid")
 time.sleep(2.5)

@@ -99,10 +99,24 @@ public class ExplorerActivity extends Activity {
         Uri rootDoc = DocumentsContract.buildDocumentUriUsingTree(
                 tree, DocumentsContract.getTreeDocumentId(tree));
         String rootName = getIntent().getStringExtra("tree_name");
-        if (rootName == null || rootName.isEmpty()) rootName = "picked folder";
+        if (rootName == null || rootName.isEmpty()) rootName = treeName(tree);
         docStack.add(rootDoc);
         nameStack.add(rootName);
         reload();
+    }
+
+    /** Best-effort folder label from the tree id, e.g. primary:Download/x -> x. */
+    private static String treeName(Uri tree) {
+        try {
+            String id = DocumentsContract.getTreeDocumentId(tree);
+            int colon = id.indexOf(':');
+            String path = colon >= 0 ? id.substring(colon + 1) : id;
+            int slash = path.lastIndexOf('/');
+            String leaf = slash >= 0 ? path.substring(slash + 1) : path;
+            return leaf.isEmpty() ? "picked folder" : leaf;
+        } catch (RuntimeException e) {
+            return "picked folder";
+        }
     }
 
     private SharedPreferences prefs() {
@@ -127,7 +141,7 @@ public class ExplorerActivity extends Activity {
             nameStack.clear();
             docStack.add(DocumentsContract.buildDocumentUriUsingTree(
                     tree, DocumentsContract.getTreeDocumentId(tree)));
-            nameStack.add("picked folder");
+            nameStack.add(treeName(tree));
             reload();
         }
     }
