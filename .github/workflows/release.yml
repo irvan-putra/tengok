@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      EXPECTED_CERT_SHA256: "439CF71776000DCB04E32A197AD0BC1FD084B78DC329224201EC2A1845E9B8EE9"
+      EXPECTED_CERT_SHA256: "439CF7177600DCB04E32A197AD0BC1FD084B78DC329224201EC2A1845E9B8EE9"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
