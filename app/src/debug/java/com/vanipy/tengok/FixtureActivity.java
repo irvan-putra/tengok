@@ -31,12 +31,12 @@ public class FixtureActivity extends Activity {
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         column.setPadding(pad, pad, pad, pad);
 
-        addButton(column, "MIDI: C major scale", () -> open("scale.mid", scaleMid()));
-        addButton(column, "MIDI: two-track song, tempo change", () -> open("song.mid", songMid()));
-        addButton(column, "MIDI: corrupt file", () -> open("corrupt.mid", corruptMid()));
-        addButton(column, "Text: hello", () -> open("hello.txt", helloTxt()));
-        addButton(column, "Hex: random blob", () -> open("blob.bin", blob()));
-        addButton(column, "Image: painted PNG", () -> open("painted.png", paintedPng()));
+        addButton(column, "MIDI: C major scale", "scale.mid", FixtureActivity::scaleMid);
+        addButton(column, "MIDI: two-track song, tempo change", "song.mid", FixtureActivity::songMid);
+        addButton(column, "MIDI: corrupt file", "corrupt.mid", FixtureActivity::corruptMid);
+        addButton(column, "Text: hello", "hello.txt", FixtureActivity::helloTxt);
+        addButton(column, "Hex: random blob", "blob.bin", FixtureActivity::blob);
+        addButton(column, "Image: painted PNG", "painted.png", FixtureActivity::paintedPng);
 
         setContentView(column);
     }
@@ -45,14 +45,14 @@ public class FixtureActivity extends Activity {
         byte[] make() throws IOException;
     }
 
-    private void addButton(LinearLayout column, String label, Maker maker) {
+    private void addButton(LinearLayout column, String label, String fileName, Maker maker) {
         Button b = new Button(this);
         b.setText(label);
         b.setOnClickListener(v -> {
             try {
                 byte[] data = maker.make();
                 Log.i(TAG, "TENGOK-FIXTURE-READY " + label);
-                open(label, data);
+                open(fileName, data);
             } catch (IOException e) {
                 Log.e(TAG, "fixture failed", e);
             }
