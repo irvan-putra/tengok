@@ -28,6 +28,13 @@ jobs:
       - run: chmod +x ./gradlew
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Verify launcher icon matches the app version
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet pillow==12.3.0
+          VER=$(sed -n 's/^val appVersionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          python3 tools/badge_icon.py "$VER"
+          git diff --exit-code -- app/src/main/res || { echo "launcher icon is stale; run: python3 tools/badge_icon.py $VER and commit"; exit 1; }
       - name: Assemble debug APK
         run: ./gradlew --no-daemon assembleDebug
       - name: Assert package ID, version and no permissions
