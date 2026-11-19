@@ -189,16 +189,21 @@ back()
 for test_uri in (f"file:///data/data/{PKG}/files/smoke.mid",
                  "file:///sdcard/Download/smoke.mid",
                  "content://media/external/file/1"):
-    rr = adb("shell", "cmd", "package", "resolve-activity", "--brief",
+    rr = adb("shell", "cmd", "package", "query-intent-activities", "--brief",
              "-a", "android.intent.action.VIEW", "-t", "audio/midi",
              "-d", test_uri)
     print("RESOLVER", test_uri, "->",
           rr.stdout.decode("utf-8", "replace").strip().replace("\n", " | "),
           rr.stderr.decode("utf-8", "replace").strip())
 
+# pm clear at the start wiped the app files dir, so re-deliver the
+# independent MIDI now, after the clear (same run-as path as run.sh).
+adb("push", "/tmp/smoke.mid", "/data/local/tmp/smoke.mid")
+adb("shell", "chmod", "644", "/data/local/tmp/smoke.mid")
+adb("shell", "run-as", PKG, "mkdir", "-p", "files")
+adb("shell", "run-as", PKG, "cp", "/data/local/tmp/smoke.mid", "files/smoke.mid")
+
 # ---- real implicit VIEW via a content URI, like a file manager would send ----
-adb("shell", "input", "keyevent", "3")  # home first so only the intent opens us
-time.sleep(1)
 rr = adb("shell", "am", "start",
          "-a", "android.intent.action.VIEW",
          "-t", "audio/midi",
@@ -208,9 +213,13 @@ print("am start implicit content VIEW:",
       rr.stdout.decode("utf-8", "replace").strip(),
       rr.stderr.decode("utf-8", "replace").strip())
 time.sleep(2.5)
+if not present("MIDI format 1") and present("tengok"):
+    tap("tengok")  # system chooser: pick tengok the way a user would
+    time.sleep(2)
 need("MIDI format 1")
 need("Violin")
-shot("11b-implicit-content-view")
+need("melody")
+shot("11-implicit-content-view")
 back()
 
 # ---- details sheet over a real VIEW intent with an independent file ----
