@@ -51,7 +51,10 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/cert.txt
           GOT=$(grep -m1 'certificate SHA-256 digest' /tmp/cert.txt | awk '{print toupper($NF)}')
+          echo "cert digest extracted: [$GOT]"
           test "$GOT" = "$EXPECTED_CERT_SHA256"
+          echo "cert pin matches"
+          "$BT/aapt" dump badging "$APK" | head -3
           "$BT/aapt" dump badging "$APK" | grep -F "package: name='com.vanipy.tengok'"
           "$BT/aapt" dump badging "$APK" | grep -F "versionName='${VER}'"
           if "$BT/aapt" dump permissions "$APK" | grep -q 'uses-permission'; then exit 1; fi
