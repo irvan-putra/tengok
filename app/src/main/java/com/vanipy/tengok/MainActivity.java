@@ -19,6 +19,7 @@ import android.widget.Toast;
  */
 public class MainActivity extends Activity {
     private static final int REQ_OPEN = 41;
+    private static final int REQ_TREE = 42;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -126,6 +127,15 @@ public class MainActivity extends Activity {
         column.addView(open, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
+        Button browse = new Button(this);
+        browse.setText("Browse a folder");
+        browse.setTextSize(17);
+        browse.setOnClickListener(v -> browseFolder());
+        LinearLayout.LayoutParams browseLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        browseLp.setMargins(0, Ui.dp(this, 12), 0, 0);
+        column.addView(browse, browseLp);
+
         TextView or = new TextView(this);
         or.setText("or tap a file in any app and choose tengok");
         or.setTextSize(14);
@@ -216,11 +226,28 @@ public class MainActivity extends Activity {
         setContentView(scroll);
     }
 
+    private void browseFolder() {
+        String saved = getSharedPreferences("tengok", MODE_PRIVATE).getString("explorer_tree", null);
+        if (saved != null) {
+            startActivity(new Intent(this, ExplorerActivity.class));
+            return;
+        }
+        Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        startActivityForResult(pick, REQ_TREE);
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQ_OPEN && resultCode == RESULT_OK && data != null && data.getData() != null) {
             openViewer(data.getData(), data.getType());
+        } else if (requestCode == REQ_TREE && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            Uri tree = data.getData();
+            getContentResolver().takePersistableUriPermission(
+                    tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getSharedPreferences("tengok", MODE_PRIVATE).edit()
+                    .putString("explorer_tree", tree.toString()).apply();
+            startActivity(new Intent(this, ExplorerActivity.class));
         } else if (requestCode == REQ_OPEN) {
             Toast.makeText(this, "No file chosen", Toast.LENGTH_SHORT).show();
         }
