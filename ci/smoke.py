@@ -370,7 +370,9 @@ back()
 # the dialog must show the failure text and the app must stay alive.
 adb("shell", "am", "force-stop", PKG)
 time.sleep(1)
-rr = adb("shell", "am", "start", "-n", f"{PKG}/.ViewerActivity",
+# ViewerActivity is not exported; route through MainActivity's VIEW handling,
+# which forwards the debug-only failure flag to the viewer
+rr = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity",
          "-t", "audio/midi",
          "--ez", "fail_details_hash", "true",
          "-d", f"content://{PKG}.fixtureprovider/smoke.mid")
