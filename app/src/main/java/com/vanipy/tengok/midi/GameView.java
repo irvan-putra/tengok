@@ -42,7 +42,10 @@ public final class GameView extends View {
     private double nowMs;
     private double pxPerSec;
     private int keyboardH;
-    private boolean keyboardLogged;
+    private int keysLoggedW = -1;
+    private int keysLoggedH = -1;
+    private int keysLoggedX = -1;
+    private int keysLoggedY = -1;
 
     public GameView(Context ctx) {
         super(ctx);
@@ -62,7 +65,7 @@ public final class GameView extends View {
         // pad to whole octaves so the keyboard starts and ends on C
         loPitch = Math.max(0, (lo / 12) * 12 - 12);
         hiPitch = Math.min(127, ((hi / 12) + 2) * 12 - 1);
-        keyboardLogged = false;
+        keysLoggedW = -1;
         invalidate();
     }
 
@@ -161,10 +164,14 @@ public final class GameView extends View {
         // judged-note feedback: brief tint over the key area is handled by alpha notes;
         // scoring readout lives in the panel text under this view.
 
-        if (!keyboardLogged && w > 0) {
-            keyboardLogged = true;
-            int[] loc = new int[2];
-            getLocationOnScreen(loc);
+        int[] loc = new int[2];
+        getLocationOnScreen(loc);
+        if (w > 0 && (w != keysLoggedW || h != keysLoggedH
+                || loc[0] != keysLoggedX || loc[1] != keysLoggedY)) {
+            keysLoggedW = w;
+            keysLoggedH = h;
+            keysLoggedX = loc[0];
+            keysLoggedY = loc[1];
             StringBuilder sb = new StringBuilder("TENGOK-GAME-KEYS");
             for (int p = loPitch; p <= hiPitch; p++) {
                 RectF kr = keyRect(p);

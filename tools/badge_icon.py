@@ -3,8 +3,9 @@
 
 Same shared rules as the other vanipy apps: numbers-only version strip across
 the bottom 24%, picture inside the round-mask safe circle, deterministic
-output (pinned Pillow + pinned DejaVu font, fail instead of substituting).
-    pip install pillow==12.3.0   (fonts-dejavu-core provides the font)
+output (pinned Pillow + pinned DejaVu font vendored in tools/fonts/, fail
+instead of substituting).
+    pip install pillow==12.3.0
 """
 import math, os, sys
 
