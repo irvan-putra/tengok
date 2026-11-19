@@ -14,6 +14,7 @@ fi
 python3 ci/make_midi.py /tmp/smoke.mid
 adb push /tmp/smoke.mid /data/local/tmp/smoke.mid
 adb shell chmod 644 /data/local/tmp/smoke.mid
+adb shell run-as $PKG mkdir -p files
 adb shell run-as $PKG cp /data/local/tmp/smoke.mid files/smoke.mid
 adb shell run-as $PKG ls -la files/smoke.mid
 python3 ci/smoke.py
