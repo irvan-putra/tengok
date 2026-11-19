@@ -33,6 +33,7 @@ public class FixtureActivity extends Activity {
 
         addButton(column, "MIDI: C major scale", "scale.mid", FixtureActivity::scaleMid);
         addButton(column, "MIDI: two-track song, tempo change", "song.mid", FixtureActivity::songMid);
+        addButton(column, "MIDI: long walk, auto-follow", "longwalk.mid", FixtureActivity::longWalkMid);
         addButton(column, "MIDI: corrupt file", "corrupt.mid", FixtureActivity::corruptMid);
         addButton(column, "Text: hello", "hello.txt", FixtureActivity::helloTxt);
         addButton(column, "Hex: random blob", "blob.bin", FixtureActivity::blob);
@@ -118,6 +119,25 @@ public class FixtureActivity extends Activity {
         metaEnd(t2, 0);
 
         return smf(1, 480, new byte[][]{t0.toByteArray(), t1.toByteArray(), t2.toByteArray()});
+    }
+
+    /** Format 0: 80 walking eighth notes over 20s, so the roll must scroll to follow. */
+    static byte[] longWalkMid() throws IOException {
+        ByteArrayOutputStream track = new ByteArrayOutputStream();
+        metaText(track, 0, 0x03, "walk");
+        metaTempo(track, 0, 500000); // 120 bpm
+        metaTimeSig(track, 0, 4, 4);
+        event(track, 0, 0xC0, 32, -1); // acoustic bass
+        int p = 36; // C2
+        int step = 2;
+        for (int i = 0; i < 80; i++) {
+            event(track, 0, 0x90, p, 90);
+            event(track, 240, 0x80, p, 0); // eighth note = 0.25s at 120 bpm
+            p += step;
+            if (p >= 60 || p <= 36) step = -step;
+        }
+        metaEnd(track, 0);
+        return smf(0, 480, new byte[][]{track.toByteArray()});
     }
 
     static byte[] corruptMid() {

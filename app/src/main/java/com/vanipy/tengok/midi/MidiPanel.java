@@ -38,6 +38,7 @@ public class MidiPanel {
     private MediaPlayer player;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private PianoRollView roll;
+    private HorizontalScrollView rollScroll;
     private SeekBar seek;
     private TextView clock;
     private Button playButton;
@@ -53,6 +54,7 @@ public class MidiPanel {
                     int ms = player.getCurrentPosition();
                     Log.i(TAG, "TENGOK-MIDI-POS ms=" + ms);
                     updateClock(ms);
+                    followCursor();
                 }
             } catch (IllegalStateException ignored) {
             }
@@ -116,6 +118,7 @@ public class MidiPanel {
             int rollHeight = (int) (180 * ctx.getResources().getDisplayMetrics().density);
             roll.setMidi(midi, rollHeight);
             HorizontalScrollView hsv = new HorizontalScrollView(ctx);
+            rollScroll = hsv;
             hsv.addView(roll);
             rollCard.addView(hsv, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, (int) (180 * ctx.getResources().getDisplayMetrics().density)));
@@ -238,6 +241,25 @@ public class MidiPanel {
                 handler.post(ticker);
             }
         } catch (IllegalStateException ignored) {
+        }
+    }
+
+    /**
+     * Keep the playhead visible while the song plays. Only corrects when the
+     * line nears the right edge or leaves the left of the viewport, so a
+     * manual scroll that still shows the line is left alone.
+     */
+    private void followCursor() {
+        if (roll == null || rollScroll == null) return;
+        float x = roll.cursorX();
+        if (x < 0) return;
+        int vw = rollScroll.getWidth();
+        if (vw <= 0) return;
+        int sx = rollScroll.getScrollX();
+        if (x < sx + vw * 0.10f || x > sx + vw * 0.66f) {
+            int target = Math.max(0, (int) (x - vw * 0.33f));
+            Log.i(TAG, "TENGOK-MIDI-FOLLOW scrollX=" + target);
+            rollScroll.smoothScrollTo(target, 0);
         }
     }
 

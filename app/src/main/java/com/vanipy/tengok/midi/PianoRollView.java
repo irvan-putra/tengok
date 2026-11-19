@@ -66,6 +66,11 @@ public class PianoRollView extends View {
         invalidate();
     }
 
+    /** X pixel of the playback cursor inside this view, or -1 when hidden. */
+    public float cursorX() {
+        return cursorSec < 0 ? -1f : (float) (cursorSec * pxPerSec);
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);

@@ -154,6 +154,27 @@ need("Acoustic Bass")
 shot("05-midi-song")
 back()
 
+# ---- long song: the piano roll follows the playback cursor ----
+tap("MIDI: long walk, auto-follow")
+need("MIDI format 0")
+need("80 notes")
+adb("shell", "logcat", "-c")
+tap("Play", exact=True)
+time.sleep(8)
+positions = [int(p) for p in re.findall(r"TENGOK-MIDI-POS ms=(\d+)",
+             adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))]
+print("long-walk positions:", positions)
+if len(positions) < 2 or positions[-1] < 6000:
+    shot("FAILED-midi-long-progress")
+    print("long walk did not play past the first viewport:", positions)
+    sys.exit(1)
+if not logcat_has("TENGOK-MIDI-FOLLOW"):
+    shot("FAILED-midi-follow")
+    print("piano roll did not auto-follow the cursor (no TENGOK-MIDI-FOLLOW marker)")
+    sys.exit(1)
+shot("05b-midi-follow")
+back()
+
 # ---- corrupt MIDI fails with a readable error, hex offered ----
 tap("MIDI: corrupt file")
 need("can't read this MIDI file")
