@@ -23,6 +23,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        CrashLog.install(getApplicationContext());
         Intent intent = getIntent();
         Uri incoming = extractUri(intent);
         if (incoming != null) {
@@ -75,6 +76,33 @@ public class MainActivity extends Activity {
         sub.setGravity(Gravity.CENTER);
         sub.setPadding(0, Ui.dp(this, 4), 0, Ui.dp(this, 32));
         column.addView(sub);
+
+        String crash = CrashLog.read(this);
+        if (crash != null) {
+            LinearLayout crashCard = Ui.card(this);
+            crashCard.addView(Ui.line(this, "tengok crashed last time"));
+            crashCard.addView(Ui.muted(this,
+                    "Sharing the details helps fix it - nothing is sent by itself."));
+            Button share = new Button(this);
+            share.setText("Share crash details");
+            final String report = crash;
+            share.setOnClickListener(v -> {
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_SUBJECT, "tengok crash report");
+                send.putExtra(Intent.EXTRA_TEXT, report);
+                startActivity(Intent.createChooser(send, null));
+            });
+            crashCard.addView(share);
+            Button dismiss = new Button(this);
+            dismiss.setText("Dismiss");
+            dismiss.setOnClickListener(v -> {
+                CrashLog.clear(this);
+                showHome();
+            });
+            crashCard.addView(dismiss);
+            column.addView(crashCard);
+        }
 
         Button open = new Button(this);
         open.setText("Open a file");
