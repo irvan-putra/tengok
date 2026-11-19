@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
         Intent intent = getIntent();
         Uri incoming = extractUri(intent);
         if (incoming != null) {
-            openViewer(incoming);
+            openViewer(incoming, intent.getType());
             finish();
             return;
         }
@@ -162,15 +162,15 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQ_OPEN && resultCode == RESULT_OK && data != null && data.getData() != null) {
-            openViewer(data.getData());
+            openViewer(data.getData(), data.getType());
         } else if (requestCode == REQ_OPEN) {
             Toast.makeText(this, "No file chosen", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void openViewer(Uri uri) {
+    private void openViewer(Uri uri, String declaredType) {
         Intent view = new Intent(this, ViewerActivity.class);
-        view.setData(uri);
+        view.setDataAndType(uri, declaredType);
         startActivity(view);
     }
 }

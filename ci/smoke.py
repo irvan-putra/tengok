@@ -189,7 +189,7 @@ back()
 for test_uri in (f"file:///data/data/{PKG}/files/smoke.mid",
                  "file:///sdcard/Download/smoke.mid",
                  "content://media/external/file/1"):
-    rr = adb("shell", "pm", "query-intent-activities", "--brief",
+    rr = adb("shell", "cmd", "package", "resolve-activity", "--brief",
              "-a", "android.intent.action.VIEW", "-t", "audio/midi",
              "-d", test_uri)
     print("RESOLVER", test_uri, "->",
