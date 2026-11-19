@@ -185,6 +185,34 @@ need("480 × 320")
 shot("10-image")
 back()
 
+# ---- ground implicit "open with" resolution before testing the handler ----
+for test_uri in (f"file:///data/data/{PKG}/files/smoke.mid",
+                 "file:///sdcard/Download/smoke.mid",
+                 "content://media/external/file/1"):
+    rr = adb("shell", "cmd", "package", "resolve-activity", "--brief",
+             "-a", "android.intent.action.VIEW", "-t", "audio/midi",
+             "-d", test_uri)
+    print("RESOLVER", test_uri, "->",
+          rr.stdout.decode("utf-8", "replace").strip().replace("\n", " | "),
+          rr.stderr.decode("utf-8", "replace").strip())
+
+# ---- real implicit VIEW via a content URI, like a file manager would send ----
+adb("shell", "input", "keyevent", "3")  # home first so only the intent opens us
+time.sleep(1)
+rr = adb("shell", "am", "start",
+         "-a", "android.intent.action.VIEW",
+         "-t", "audio/midi",
+         "--grant-read-uri-permission",
+         "-d", f"content://{PKG}.fixtureprovider/smoke.mid")
+print("am start implicit content VIEW:",
+      rr.stdout.decode("utf-8", "replace").strip(),
+      rr.stderr.decode("utf-8", "replace").strip())
+time.sleep(2.5)
+need("MIDI format 1")
+need("Violin")
+shot("11b-implicit-content-view")
+back()
+
 # ---- details sheet over a real VIEW intent with an independent file ----
 r = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity",
         "-a", "android.intent.action.VIEW",

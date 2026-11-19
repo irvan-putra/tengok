@@ -4,5 +4,10 @@
         <!-- Debug builds only: synthetic-fixture screen used by the emulator
              smoke test. Never shipped in release APKs. -->
         <activity android:name=".FixtureActivity" android:exported="true" />
+        <provider
+            android:name=".FixtureProvider"
+            android:authorities="com.vanipy.tengok.fixtureprovider"
+            android:exported="true"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
