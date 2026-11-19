@@ -95,14 +95,14 @@ public class ViewerActivity extends Activity {
         try {
             head = source.head(8192);
         } catch (IOException e) {
-            showError("tengok couldn't open this file", e.getMessage());
+            showError("tengok couldn't open this file", "open", e);
             return;
         }
         String declared = getIntent().getType();
         kind = Sniffer.sniff(source.name, declared, head);
         DiagLog.log(this, "VIEW kind=" + kind.name().toLowerCase(java.util.Locale.ROOT)
                 + " size=" + source.size
-                + " declared=" + (declared == null ? "none" : declared)
+                + " declared=" + DiagLog.mime(declared)
                 + " scheme=" + (source.uri() == null ? "file" : source.uri().getScheme()));
         showKind(kind);
     }
@@ -137,14 +137,14 @@ public class ViewerActivity extends Activity {
         try {
             data = source.readAll(Source.MAX_BUFFERED_BYTES);
         } catch (IOException e) {
-            showError("tengok couldn't read this MIDI file", e.getMessage());
+            showError("tengok couldn't read this MIDI file", "read", e);
             return;
         }
         MidiFile midi;
         try {
             midi = MidiFile.parse(data);
         } catch (MidiFile.ParseException e) {
-            showError("tengok can't read this MIDI file", e.getMessage());
+            showError("tengok can't read this MIDI file", "parse", e);
             return;
         }
         buffered = data;
@@ -159,12 +159,16 @@ public class ViewerActivity extends Activity {
             TextPanel.Result r = TextPanel.decode(source);
             content.addView(TextPanel.build(this, r));
         } catch (IOException e) {
-            showError("tengok couldn't read this file", e.getMessage());
+            showError("tengok couldn't read this file", "read", e);
         }
     }
 
-    private void showError(String headline, String detail) {
-        DiagLog.log(this, "ERR view: " + headline + (detail == null ? "" : " (" + detail + ")"));
+    private void showError(String headline, String op, Throwable cause) {
+        // On-screen the user sees the real message (their own phone, their
+        // own file); the shareable log records only the exception class.
+        String detail = cause == null ? null : cause.getMessage();
+        DiagLog.log(this, "ERR view op=" + op + " ex="
+                + (cause == null ? "unknown" : cause.getClass().getName()));
         LinearLayout column = Ui.column(this);
         LinearLayout card = Ui.card(this);
         card.addView(Ui.line(this, headline));
@@ -234,7 +238,7 @@ public class ViewerActivity extends Activity {
                 if (detail.length() > 140) detail = detail.substring(0, 140);
                 hash = "couldn't compute (" + t.getClass().getSimpleName() + detail + ")";
                 Log.e(TAG, "TENGOK-DETAILS-ERR hash: " + t.getClass().getSimpleName());
-                DiagLog.log(this, "DETAILS-ERR hash: " + t.getClass().getSimpleName() + detail);
+                DiagLog.log(this, "DETAILS-ERR op=hash ex=" + t.getClass().getName());
             }
             String h = hash;
             runOnUiThread(() -> {
@@ -244,7 +248,7 @@ public class ViewerActivity extends Activity {
                         dialog.setMessage(sb + "\nSHA-256:\n" + h);
                         Log.i(TAG, "TENGOK-DETAILS-OK");
                         DiagLog.log(this, h.length() == 64
-                                ? "DETAILS-OK sha256=" + h.substring(0, 12) + "..."
+                                ? "DETAILS-OK"
                                 : "DETAILS-OK fallback-shown");
                     }
                 } catch (RuntimeException e) {

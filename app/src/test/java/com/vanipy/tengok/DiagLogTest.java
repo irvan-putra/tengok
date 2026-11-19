@@ -66,4 +66,14 @@ public class DiagLogTest {
         assertFalse(out.contains("cantina2.mid"));
         assertTrue(out.contains("audio/midi"));
     }
+
+    @Test
+    public void mime_normalizesValidAndRejectsFreeText() {
+        assertEquals("audio/midi", DiagLog.mime("Audio/MIDI"));
+        assertEquals("text/plain", DiagLog.mime("text/plain"));
+        assertEquals("none", DiagLog.mime(null));
+        assertEquals("<other>", DiagLog.mime("/secret"));
+        assertEquals("<other>", DiagLog.mime("cantina2.mid"));
+        assertEquals("<other>", DiagLog.mime("text/plain /sdcard/Download/secret.txt"));
+    }
 }

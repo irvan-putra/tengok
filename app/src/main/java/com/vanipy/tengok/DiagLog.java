@@ -35,9 +35,9 @@ public final class DiagLog {
     }
 
     /**
-     * URI/path sanitize plus the watched display name. Provider exception
-     * messages can quote the bare name with no path syntax, so structure
-     * alone cannot catch it.
+     * Display-only scrub for the on-screen Details fallback message: URI/path
+     * sanitize plus the watched display name. Shareable surfaces never carry
+     * raw messages, so they do not depend on this.
      */
     public static String scrub(String text) {
         String out = CrashLog.sanitize(text);
@@ -46,6 +46,14 @@ public final class DiagLog {
             out = out.replace(n, "<file>");
         }
         return out;
+    }
+
+    /** Normalize an intent-declared type: a MIME token or "<other>". */
+    public static String mime(String type) {
+        if (type == null) return "none";
+        String t = type.toLowerCase(Locale.ROOT).trim();
+        if (t.matches("[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+")) return t;
+        return "<other>";
     }
 
     public static void log(Context ctx, String event) {
