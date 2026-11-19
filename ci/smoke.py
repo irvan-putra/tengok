@@ -168,9 +168,21 @@ if len(positions) < 2 or positions[-1] < 6000:
     shot("FAILED-midi-long-progress")
     print("long walk did not play past the first viewport:", positions)
     sys.exit(1)
-if not logcat_has("TENGOK-MIDI-FOLLOW"):
+follows = [(int(a), int(b), int(c)) for a, b, c in re.findall(
+    r"TENGOK-MIDI-FOLLOW sx=(\d+) cx=(\d+) vw=(\d+)",
+    adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))]
+print("follow corrections (sx, cx, vw):", follows)
+if len(follows) < 2:
     shot("FAILED-midi-follow")
-    print("piano roll did not auto-follow the cursor (no TENGOK-MIDI-FOLLOW marker)")
+    print("piano roll did not keep scrolling with the cursor:", follows)
+    sys.exit(1)
+if not all(b[0] > a[0] for a, b in zip(follows, follows[1:])):
+    shot("FAILED-midi-follow")
+    print("viewport scroll did not track the cursor forward:", follows)
+    sys.exit(1)
+if not all(0 <= cx - sx <= vw for sx, cx, vw in follows):
+    shot("FAILED-midi-follow")
+    print("playhead placed outside the viewport:", follows)
     sys.exit(1)
 shot("05b-midi-follow")
 back()
