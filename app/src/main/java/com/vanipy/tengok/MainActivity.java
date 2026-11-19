@@ -171,6 +171,10 @@ public class MainActivity extends Activity {
     private void openViewer(Uri uri, String declaredType) {
         Intent view = new Intent(this, ViewerActivity.class);
         view.setDataAndType(uri, declaredType);
+        if (BuildConfig.DEBUG) {
+            view.putExtra("fail_details_hash",
+                    getIntent().getBooleanExtra("fail_details_hash", false));
+        }
         startActivity(view);
     }
 }
