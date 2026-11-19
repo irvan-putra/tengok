@@ -86,7 +86,8 @@ public class MainActivity extends Activity {
             LinearLayout crashCard = Ui.card(this);
             crashCard.addView(Ui.line(this, "tengok crashed last time"));
             crashCard.addView(Ui.muted(this,
-                    "Sharing the details helps fix it - nothing is sent by itself."));
+                    "Sharing the details helps fix it - nothing is sent by itself, "
+                    + "and the full trace stays on this phone."));
             for (String line : crash.split("\\n")) {
                 if (line.contains("Exception") || line.contains("Error")) {
                     crashCard.addView(Ui.muted(this, line.trim()));
@@ -95,12 +96,11 @@ public class MainActivity extends Activity {
             }
             Button share = new Button(this);
             share.setText("Share crash details");
-            final String report = crash;
             share.setOnClickListener(v -> {
                 Intent send = new Intent(Intent.ACTION_SEND);
                 send.setType("text/plain");
                 send.putExtra(Intent.EXTRA_SUBJECT, "tengok crash report");
-                send.putExtra(Intent.EXTRA_TEXT, report);
+                send.putExtra(Intent.EXTRA_TEXT, CrashLog.shareableReport(this));
                 startActivity(Intent.createChooser(send, null));
             });
             crashCard.addView(share);

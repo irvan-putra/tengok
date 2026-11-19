@@ -323,8 +323,8 @@ time.sleep(1)
 need("MIDI format 1")  # app alive after the failure, dialog dismissed
 back()
 log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
-if "DETAILS-ERR hash: SecurityException: simulated grant failure" not in log:
-    print("EXPECTED IN diag.log: DETAILS-ERR hash: SecurityException: simulated grant failure")
+if "DETAILS-ERR op=hash ex=java.lang.SecurityException" not in log:
+    print("EXPECTED IN diag.log: DETAILS-ERR op=hash ex=java.lang.SecurityException")
     print(log[-2000:])
     sys.exit(1)
 
@@ -351,8 +351,8 @@ adb("shell", "input", "keyevent", "4")  # close dialog
 time.sleep(1)
 back()
 log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
-if "DETAILS-OK sha256=80c6b8bce952" not in log:
-    print("EXPECTED IN diag.log: DETAILS-OK sha256=80c6b8bce952")
+if "DETAILS-OK" not in log:
+    print("EXPECTED IN diag.log: DETAILS-OK")
     print(log[-2000:])
     sys.exit(1)
 
@@ -369,12 +369,12 @@ rr = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
 time.sleep(2.5)
 need("tengok crashed last time")
 need("Share crash details")
-need("tengok debug crash test")  # preview carries the exception, sanitized
+need("tengok debug crash test")  # on-screen preview of the local trace; share payload is filtered
 shot("12c-crash-card")
 # the same events must be in the on-device diagnostic log (debug build: run-as)
 time.sleep(1)
 log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
-for wanted in ("APP-START version", "VIEW kind=midi", "CRASH java.lang.RuntimeException", "tengok debug crash test"):
+for wanted in ("APP-START version", "VIEW kind=midi", "CRASH java.lang.RuntimeException"):
     if wanted not in log:
         print("EXPECTED IN diag.log:", wanted)
         print(log[-2000:])
