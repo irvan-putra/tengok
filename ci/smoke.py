@@ -313,13 +313,36 @@ need("MIDI format 1")
 tap("Details")
 time.sleep(2.5)
 need("File details")
-need("couldn't compute (SecurityException)")
+need("couldn't compute (SecurityException: simulated grant failure)")
 # capture before probing the viewer behind the dialog: need()'s swipe
 # fallback would dismiss the dialog and the shot would miss it
 shot("12b-details-hash-failure")
 adb("shell", "input", "keyevent", "4")  # close dialog
 time.sleep(1)
 need("MIDI format 1")  # app alive after the failure, dialog dismissed
+back()
+
+# ---- details hash over a content:// grant comes from buffered bytes ----
+# Phone trial: the provider refused the hash re-read while MediaPlayer held
+# the same Uri (SecurityException). The hash must come from the bytes the
+# viewer already loaded, so no second provider read happens.
+adb("shell", "am", "force-stop", PKG)
+time.sleep(1)
+rr = adb("shell", "am", "start",
+         "-a", "android.intent.action.VIEW",
+         "-n", f"{PKG}/.MainActivity",
+         "-t", "audio/midi",
+         "-d", f"content://{PKG}.fixtureprovider/smoke.mid")
+print("am start viewer content hash:", rr.stdout.decode("utf-8", "replace").strip(),
+      rr.stderr.decode("utf-8", "replace").strip())
+time.sleep(2.5)
+need("MIDI format 1")
+tap("Details")
+time.sleep(2.5)
+need("80c6b8bce952cee0d5bd88")  # pinned hash of the deterministic fixture
+shot("12d-details-content-hash")
+adb("shell", "input", "keyevent", "4")  # close dialog
+time.sleep(1)
 back()
 
 # ---- crash capture: a real uncaught exception leaves a shareable report ----

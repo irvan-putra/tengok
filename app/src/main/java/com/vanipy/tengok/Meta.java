@@ -12,17 +12,27 @@ public final class Meta {
     }
 
     public static String sha256(Source source) throws IOException {
+        byte[] buf = new byte[8192];
+        try (InputStream in = source.open()) {
+            return sha256(in, buf);
+        }
+    }
+
+    /** Hash bytes already in memory - no second provider read needed. */
+    public static String sha256(byte[] data) throws IOException {
+        return sha256(new java.io.ByteArrayInputStream(data), new byte[8192]);
+    }
+
+    private static String sha256(InputStream in, byte[] buf) throws IOException {
         MessageDigest md;
         try {
             md = MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
             return "unavailable";
         }
-        byte[] buf = new byte[8192];
-        try (InputStream in = source.open()) {
-            int r;
-            while ((r = in.read(buf)) >= 0) md.update(buf, 0, r);
-        }
+        int r;
+        while ((r = in.read(buf)) >= 0) md.update(buf, 0, r);
+        in.close();
         StringBuilder sb = new StringBuilder();
         for (byte b : md.digest()) sb.append(String.format(Locale.ROOT, "%02x", b & 0xFF));
         return sb.toString();
