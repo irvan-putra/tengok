@@ -260,8 +260,21 @@ time.sleep(1)
 back()
 
 # ---- SAF picker opens from home ----
-adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
-time.sleep(2)
+# force-stop for a clean, deterministic task state after the intent chains
+adb("shell", "am", "force-stop", PKG)
+rr = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+print("am start home:", rr.stdout.decode("utf-8", "replace").strip(),
+      rr.stderr.decode("utf-8", "replace").strip())
+home = False
+for _ in range(8):
+    time.sleep(1)
+    if present("Open a file"):
+        home = True
+        break
+if not home:
+    shot("FAILED-home-state")
+    print("EXPECTED ON SCREEN: Open a file (home after force-stop)")
+    sys.exit(1)
 tap("Open a file")
 time.sleep(2)
 shot("13-saf-picker")
