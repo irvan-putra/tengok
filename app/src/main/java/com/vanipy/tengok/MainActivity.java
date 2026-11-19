@@ -185,6 +185,25 @@ public class MainActivity extends Activity {
             column.addView(card);
         }
 
+        LinearLayout diag = Ui.card(this);
+        diag.addView(Ui.line(this, "Something wrong?"));
+        diag.addView(Ui.muted(this,
+                "tengok keeps a small diagnostic log on this phone: what was opened, "
+                + "which step failed, no file contents. It leaves the phone only if you share it."));
+        Button share = new Button(this);
+        share.setText("Share diagnostics");
+        share.setOnClickListener(v -> {
+            String log = DiagLog.read(this).trim();
+            if (log.isEmpty()) log = "(no diagnostics yet)";
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_SUBJECT, "tengok diagnostics " + BuildConfig.VERSION_NAME);
+            send.putExtra(Intent.EXTRA_TEXT, "tengok diagnostics\n" + log);
+            startActivity(Intent.createChooser(send, null));
+        });
+        diag.addView(share);
+        column.addView(diag);
+
         Button back = new Button(this);
         back.setText("Back");
         back.setOnClickListener(v -> showHome());

@@ -112,6 +112,7 @@ shot("01-home")
 tap("What tengok can open")
 need("MIDI music")
 need("Not yet, honestly")
+need("Share diagnostics")
 shot("02-about")
 back()
 need("Open a file")
@@ -321,6 +322,11 @@ adb("shell", "input", "keyevent", "4")  # close dialog
 time.sleep(1)
 need("MIDI format 1")  # app alive after the failure, dialog dismissed
 back()
+log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
+if "DETAILS-ERR hash: SecurityException: simulated grant failure" not in log:
+    print("EXPECTED IN diag.log: DETAILS-ERR hash: SecurityException: simulated grant failure")
+    print(log[-2000:])
+    sys.exit(1)
 
 # ---- details hash over a content:// grant comes from buffered bytes ----
 # Phone trial: the provider refused the hash re-read while MediaPlayer held
@@ -344,6 +350,11 @@ shot("12d-details-content-hash")
 adb("shell", "input", "keyevent", "4")  # close dialog
 time.sleep(1)
 back()
+log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
+if "DETAILS-OK sha256=80c6b8bce952" not in log:
+    print("EXPECTED IN diag.log: DETAILS-OK sha256=80c6b8bce952")
+    print(log[-2000:])
+    sys.exit(1)
 
 # ---- crash capture: a real uncaught exception leaves a shareable report ----
 adb("shell", "am", "force-stop", PKG)
@@ -360,6 +371,17 @@ need("tengok crashed last time")
 need("Share crash details")
 need("tengok debug crash test")  # preview carries the exception, sanitized
 shot("12c-crash-card")
+# the same events must be in the on-device diagnostic log (debug build: run-as)
+time.sleep(1)
+log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
+for wanted in ("APP-START version", "VIEW kind=midi", "CRASH java.lang.IllegalStateException"):
+    if wanted not in log:
+        print("EXPECTED IN diag.log:", wanted)
+        print(log[-2000:])
+        sys.exit(1)
+if "/sdcard" in log or "content://" in log:
+    print("diag.log leaked a path or URI")
+    sys.exit(1)
 tap("Dismiss")
 time.sleep(1)
 need("Open a file")  # card gone, clean home
