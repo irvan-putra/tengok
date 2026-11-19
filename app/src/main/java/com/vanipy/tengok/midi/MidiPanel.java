@@ -177,7 +177,15 @@ public class MidiPanel {
         column.addView(transport);
 
         preparePlayer();
-        return column;
+        // The viewer cards scroll; game mode must fill the viewport instead,
+        // so the scroll wrapper lives here, not around the panel root.
+        LinearLayout wrap = new LinearLayout(ctx);
+        wrap.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll = new ScrollView(ctx);
+        scroll.addView(column);
+        wrap.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        return wrap;
     }
 
     private String tempoText() {
@@ -248,7 +256,8 @@ public class MidiPanel {
         }
         game = new GameController(ctx, midi, track, this::exitGame);
         root.removeAllViews();
-        root.addView(game.view());
+        root.addView(game.view(), new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         game.start();
     }
 

@@ -142,9 +142,9 @@ public class ViewerActivity extends Activity {
             return;
         }
         midiPanel = new MidiPanel(this, source, midi);
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(midiPanel.view());
-        content.addView(scroll);
+        // the panel wraps its own viewer cards in a ScrollView; the root must
+        // stay viewport-sized so game mode can fill exactly the screen
+        content.addView(midiPanel.view());
     }
 
     private void showText() {
