@@ -314,11 +314,32 @@ tap("Details")
 time.sleep(2.5)
 need("File details")
 need("couldn't compute (SecurityException)")
-need("MIDI format 1")  # viewer still alive behind the dialog
+# capture before probing the viewer behind the dialog: need()'s swipe
+# fallback would dismiss the dialog and the shot would miss it
 shot("12b-details-hash-failure")
 adb("shell", "input", "keyevent", "4")  # close dialog
 time.sleep(1)
+need("MIDI format 1")  # app alive after the failure, dialog dismissed
 back()
+
+# ---- crash capture: a real uncaught exception leaves a shareable report ----
+adb("shell", "am", "force-stop", PKG)
+time.sleep(1)
+r = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity",
+        "--ez", "debug_crash_test", "true")
+print("am start crash test:", r.stdout.decode("utf-8", "replace").strip(),
+      r.stderr.decode("utf-8", "replace").strip())
+time.sleep(2)
+# relaunch: the home screen must offer the shareable crash report
+rr = adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+time.sleep(2.5)
+need("tengok crashed last time")
+need("Share crash details")
+need("tengok debug crash test")  # preview carries the exception, sanitized
+shot("12c-crash-card")
+tap("Dismiss")
+time.sleep(1)
+need("Open a file")  # card gone, clean home
 
 # ---- SAF picker opens from home ----
 # force-stop for a clean, deterministic task state after the intent chains

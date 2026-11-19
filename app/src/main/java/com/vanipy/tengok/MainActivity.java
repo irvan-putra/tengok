@@ -25,6 +25,10 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         CrashLog.install(getApplicationContext());
         Intent intent = getIntent();
+        if (BuildConfig.DEBUG && intent != null
+                && intent.getBooleanExtra("debug_crash_test", false)) {
+            throw new IllegalStateException("tengok debug crash test");
+        }
         Uri incoming = extractUri(intent);
         if (incoming != null) {
             openViewer(incoming, intent.getType());
@@ -83,6 +87,12 @@ public class MainActivity extends Activity {
             crashCard.addView(Ui.line(this, "tengok crashed last time"));
             crashCard.addView(Ui.muted(this,
                     "Sharing the details helps fix it - nothing is sent by itself."));
+            for (String line : crash.split("\\n")) {
+                if (line.contains("Exception") || line.contains("Error")) {
+                    crashCard.addView(Ui.muted(this, line.trim()));
+                    break;
+                }
+            }
             Button share = new Button(this);
             share.setText("Share crash details");
             final String report = crash;
