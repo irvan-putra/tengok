@@ -16,13 +16,13 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.List;
-
+import com.vanipy.tengok.DiagLog;
 import com.vanipy.tengok.Source;
 import com.vanipy.tengok.Ui;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -301,6 +301,7 @@ public class MidiPanel {
             });
             player.setOnErrorListener((mp, what, extra) -> {
                 Log.w(TAG, "TENGOK-MIDI-ERROR what=" + what + " extra=" + extra);
+                DiagLog.log(ctx, "PLAY-ERR midi what=" + what + " extra=" + extra);
                 playButton.setEnabled(false);
                 Toast.makeText(ctx, "This device could not play the MIDI file.", Toast.LENGTH_LONG).show();
                 return true;
@@ -308,6 +309,8 @@ public class MidiPanel {
             player.prepareAsync();
         } catch (Exception e) {
             Log.w(TAG, "TENGOK-MIDI-ERROR " + e.getClass().getSimpleName());
+            DiagLog.log(ctx, "PLAY-ERR midi: " + e.getClass().getSimpleName()
+                    + (e.getMessage() == null ? "" : " " + e.getMessage()));
             playButton.setEnabled(false);
             Toast.makeText(ctx, "This device has no MIDI playback: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }

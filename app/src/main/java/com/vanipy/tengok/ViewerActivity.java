@@ -99,6 +99,10 @@ public class ViewerActivity extends Activity {
         }
         String declared = getIntent().getType();
         kind = Sniffer.sniff(source.name, declared, head);
+        DiagLog.log(this, "VIEW kind=" + kind.name().toLowerCase(java.util.Locale.ROOT)
+                + " name=" + source.name + " size=" + source.size
+                + " declared=" + (declared == null ? "none" : declared)
+                + " scheme=" + (source.uri() == null ? "file" : source.uri().getScheme()));
         showKind(kind);
     }
 
@@ -159,6 +163,7 @@ public class ViewerActivity extends Activity {
     }
 
     private void showError(String headline, String detail) {
+        DiagLog.log(this, "ERR view: " + headline + (detail == null ? "" : " (" + detail + ")"));
         LinearLayout column = Ui.column(this);
         LinearLayout card = Ui.card(this);
         card.addView(Ui.line(this, headline));
@@ -228,6 +233,7 @@ public class ViewerActivity extends Activity {
                 if (detail.length() > 140) detail = detail.substring(0, 140);
                 hash = "couldn't compute (" + t.getClass().getSimpleName() + detail + ")";
                 Log.e(TAG, "TENGOK-DETAILS-ERR hash: " + t.getClass().getSimpleName());
+                DiagLog.log(this, "DETAILS-ERR hash: " + t.getClass().getSimpleName() + detail);
             }
             String h = hash;
             runOnUiThread(() -> {
@@ -236,6 +242,9 @@ public class ViewerActivity extends Activity {
                     if (dialog.isShowing()) {
                         dialog.setMessage(sb + "\nSHA-256:\n" + h);
                         Log.i(TAG, "TENGOK-DETAILS-OK");
+                        DiagLog.log(this, h.length() == 64
+                                ? "DETAILS-OK sha256=" + h.substring(0, 12) + "..."
+                                : "DETAILS-OK fallback-shown");
                     }
                 } catch (RuntimeException e) {
                     Log.e(TAG, "TENGOK-DETAILS-ERR update: " + e.getClass().getSimpleName());

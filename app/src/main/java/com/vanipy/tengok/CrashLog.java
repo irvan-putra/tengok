@@ -39,11 +39,17 @@ public final class CrashLog {
                 try (FileOutputStream out = new FileOutputStream(new File(ctx.getFilesDir(), FILE))) {
                     out.write(sb.toString().getBytes(StandardCharsets.UTF_8));
                 }
+                DiagLog.log(ctx, "CRASH " + error.getClass().getName()
+                        + (error.getMessage() == null ? "" : " " + error.getMessage()));
             } catch (Throwable ignored) {
                 // never let crash reporting crash again
             }
             if (prev != null) prev.uncaughtException(thread, error);
         });
+        DiagLog.log(ctx, "APP-START version " + BuildConfig.VERSION_NAME
+                + " android " + android.os.Build.VERSION.RELEASE
+                + " sdk " + android.os.Build.VERSION.SDK_INT
+                + " device " + android.os.Build.MODEL);
     }
 
     /**
