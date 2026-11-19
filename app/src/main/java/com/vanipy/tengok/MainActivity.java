@@ -188,8 +188,9 @@ public class MainActivity extends Activity {
         LinearLayout diag = Ui.card(this);
         diag.addView(Ui.line(this, "Something wrong?"));
         diag.addView(Ui.muted(this,
-                "tengok keeps a small diagnostic log on this phone: what was opened, "
-                + "which step failed, no file contents. It leaves the phone only if you share it."));
+                "tengok keeps a small diagnostic log on this phone: which kind of file was opened "
+                + "(type and size, never its name), which step failed, no file contents. "
+                + "It leaves the phone only if you share it."));
         Button share = new Button(this);
         share.setText("Share diagnostics");
         share.setOnClickListener(v -> {

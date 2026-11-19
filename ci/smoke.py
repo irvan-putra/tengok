@@ -454,6 +454,9 @@ for wanted in ("APP-START version", "VIEW kind=midi", "CRASH java.lang.IllegalSt
 if "/sdcard" in log or "content://" in log:
     print("diag.log leaked a path or URI")
     sys.exit(1)
+if "smoke.mid" in log:
+    print("diag.log leaked the file's display name")
+    sys.exit(1)
 tap("Dismiss")
 time.sleep(1)
 need("Open a file")  # card gone, clean home
