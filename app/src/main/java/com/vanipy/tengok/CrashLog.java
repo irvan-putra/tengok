@@ -35,7 +35,7 @@ public final class CrashLog {
                 sb.append(fmt.format(new Date())).append('\n');
                 sb.append("version ").append(BuildConfig.VERSION_NAME).append('\n');
                 sb.append("thread ").append(thread.getName()).append('\n');
-                sb.append(Log.getStackTraceString(error));
+                sb.append(sanitize(Log.getStackTraceString(error)));
                 try (FileOutputStream out = new FileOutputStream(new File(ctx.getFilesDir(), FILE))) {
                     out.write(sb.toString().getBytes(StandardCharsets.UTF_8));
                 }
@@ -44,6 +44,18 @@ public final class CrashLog {
             }
             if (prev != null) prev.uncaughtException(thread, error);
         });
+    }
+
+    /**
+     * Exception messages can embed URIs, paths or display names of the file
+     * being viewed. Keep class/method/line info; blank anything that could
+     * carry user data. Stack frames use dotted class names, so they survive.
+     */
+    static String sanitize(String trace) {
+        return trace
+                .replaceAll("content://\\S+", "content://<redacted>")
+                .replaceAll("file://\\S+", "file://<redacted>")
+                .replaceAll("/[\\w.\\-+/%]+", "/<path>");
     }
 
     public static File file(Context ctx) {
