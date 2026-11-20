@@ -196,6 +196,10 @@ function loadSample(name) {
             if (file === name && entries[before]) entries[before].sampleId = sid;
           }
           if (current === before) showSampleLink(entries[before]);
+          /* The sample now has the stage: collapse the picker so the file
+           * gets the space. It stays a plain disclosure - tap to expand and
+           * switch samples again. */
+          document.getElementById("samples-details").open = false;
         });
       })
       .catch((e) => {
