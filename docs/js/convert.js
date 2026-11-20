@@ -68,7 +68,7 @@ function targetsFor(kind) {
     case "IMAGE":
       return [
         { id: "png", label: "PNG image", ext: "png", mime: "image/png",
-          note: "Lossless. Transparency kept. Usually a bigger file." },
+          note: "Lossless output encoding. Transparency kept; usually a bigger file. Metadata (like EXIF) is not carried over." },
         { id: "jpeg", label: "JPEG image", ext: "jpg", mime: "image/jpeg",
           note: "Lossy at 92% quality: slightly smaller, fine detail softens. Transparency becomes white." },
         { id: "webp", label: "WebP image", ext: "webp", mime: "image/webp",
@@ -77,12 +77,12 @@ function targetsFor(kind) {
     case "AUDIO":
       return [
         { id: "wav", label: "WAV audio", ext: "wav", mime: "audio/wav",
-          note: "Uncompressed PCM: no quality lost on this side, but the file is much bigger. Anything the source codec already lost stays lost." },
+          note: "Uncompressed PCM, much bigger. The browser decodes and resamples the audio, which can alter the data slightly; the sample rate follows the browser's decoder. Anything the source codec already lost stays lost." },
       ];
     case "TEXT":
       return [
         { id: "utf8", label: "UTF-8 text", ext: "txt", mime: "text/plain;charset=utf-8",
-          note: "Re-saved as UTF-8. Nothing lost." },
+          note: "Re-saved as UTF-8. Characters survive when the source encoding is detected correctly." },
         { id: "latin1", label: "Latin-1 text", ext: "txt", mime: "text/plain",
           note: "Old single-byte encoding. Characters outside Latin-1 become '?' - that loss cannot be undone in the result." },
       ];

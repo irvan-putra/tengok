@@ -69,6 +69,8 @@ jobs:
           python3 ci/make_web_fixtures.py docs/fixtures
           python3 ci/make_midi.py docs/fixtures/twotrack.mid
           git diff --exit-code -- docs/fixtures || { echo "web fixtures are stale; regenerate and commit"; exit 1; }
+      - name: Web asset cache stamps must be current
+        run: python3 ci/stamp_web.py --check
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
