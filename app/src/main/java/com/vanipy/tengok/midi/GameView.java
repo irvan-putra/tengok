@@ -59,8 +59,8 @@ public final class GameView extends View {
         this.scoring = scoring;
         notes.clear();
         int lo = 127, hi = 0;
-        for (MidiFile.Note n : midi.notes) {
-            if (n.track != track) continue;
+        for (int i = 0; i < scoring.total(); i++) {
+            MidiFile.Note n = scoring.judgedNote(i);
             notes.add(n);
             if (n.pitch < lo) lo = n.pitch;
             if (n.pitch > hi) hi = n.pitch;
@@ -143,14 +143,24 @@ public final class GameView extends View {
         paint.setColor(0xFFFBFBFE);
         canvas.drawRect(0, 0, w, h, paint);
 
-        // falling notes of the player's track, velocity-shaded like the viewer
-        for (MidiFile.Note n : notes) {
+        // falling notes of the player's track, velocity-shaded like the viewer.
+        // Judged state stays visible: played notes are gone, misses fall gray,
+        // so scrubbing back along the timeline shows the round as it stands.
+        for (int i = 0; i < notes.size(); i++) {
+            MidiFile.Note n = notes.get(i);
+            int state = scoring != null ? scoring.stateOf(i) : GameScoring.PENDING;
+            if (state == GameScoring.PERFECT || state == GameScoring.GOOD) continue;
             double y1 = hitY - (n.startSec * 1000.0 - nowMs) / 1000.0 * pxPerSec;
             double y0 = hitY - (n.endSec * 1000.0 - nowMs) / 1000.0 * pxPerSec;
             if (y1 < 0 || y0 > hitY) continue;
             RectF kr = keyRect(n.pitch);
-            paint.setColor(CHANNEL_COLORS[n.channel & 15]);
-            paint.setAlpha(80 + (n.velocity * 175 / 127));
+            if (state == GameScoring.MISS) {
+                paint.setColor(0xFF9AA0B0);
+                paint.setAlpha(90);
+            } else {
+                paint.setColor(CHANNEL_COLORS[n.channel & 15]);
+                paint.setAlpha(80 + (n.velocity * 175 / 127));
+            }
             rect.set(kr.left + 1, (float) Math.max(0, y0), kr.right - 1, (float) Math.min(hitY, y1));
             canvas.drawRoundRect(rect, 6, 6, paint);
         }

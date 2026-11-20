@@ -67,6 +67,15 @@ public class GameScoringTest {
     }
 
     @Test
+    public void judgedNoteAlignsWithStateIndex() {
+        GameScoring s = new GameScoring(song(12.0, 13.0, 29.0), 1);
+        s.strike(60, 12000);
+        assertEquals(GameScoring.PERFECT, s.stateOf(0));
+        assertEquals(12000.0, s.judgedNote(0).startSec * 1000.0, 0.001);
+        assertEquals(29000.0, s.judgedNote(2).startSec * 1000.0, 0.001);
+    }
+
+    @Test
     public void lastStartAndBadTimesDescribeThePart() {
         GameScoring s = new GameScoring(song(12.0, 29.0, 12.5), 1);
         assertEquals(29000.0, s.lastStartMs(), 0.001);

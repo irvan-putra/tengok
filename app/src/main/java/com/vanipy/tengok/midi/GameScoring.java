@@ -49,6 +49,11 @@ public final class GameScoring {
         return noteIdx.length;
     }
 
+    /** The i-th judged note, in the same order stateOf(i) uses. */
+    public MidiFile.Note judgedNote(int i) {
+        return midi.notes.get(noteIdx[i]);
+    }
+
     public int stateOf(int i) {
         return state[i];
     }

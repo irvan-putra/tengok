@@ -225,7 +225,13 @@ public final class GameController {
     }
 
     private void togglePlay() {
-        if (!prepared || backing == null || finished) return;
+        if (finished) {
+            // a done round restarts deliberately from the top on play
+            setupRound();
+            handler.postDelayed(this::togglePlay, 400);
+            return;
+        }
+        if (!prepared || backing == null) return;
         try {
             if (waiting) {
                 waiting = false;

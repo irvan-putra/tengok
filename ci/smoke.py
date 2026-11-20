@@ -437,25 +437,56 @@ if pitch != 67:
     sys.exit(1)
 strike_until_scored(67, keymap)
 need("done!")
+need("miss 0")  # the skips landed on their runways without costing a note
+need("accuracy 100%")
 shot("05f-midi-game-done")
-# the timeline scrubs the round: drag it back near the start
+# a done round restarts deliberately on play
+tap("play", exact=True)
+restarted = False
+for _ in range(20):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    if len(re.findall(r"TENGOK-GAME-READY", out)) >= 2:
+        restarted = True
+        break
+    time.sleep(0.5)
+if not restarted:
+    shot("FAILED-midi-game-late")
+    print("play after done did not restart the round")
+    sys.exit(1)
+need("perfect 0")
+print("round restarted on play after done")
+tap("exit game", exact=True)
+need("MIDI format 1")
+back()
+
+# the timeline scrubs the round: drag it into the song in a fresh round
+tap("Game", exact=True)
+time.sleep(1)
+tap("pad (3 notes)")
+time.sleep(2)
+for _ in range(20):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    if re.search(r"TENGOK-GAME-READY", out):
+        break
+    time.sleep(0.5)
 n = find("song timeline")
 if not n:
     shot("FAILED-midi-game-late")
-    print("song timeline not on screen after the round")
+    print("song timeline not on screen in the fresh round")
     sys.exit(1)
 m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n["bounds"])
 x1, y1, x2, y2 = map(int, m.groups())
-adb("shell", "input", "swipe", str((x1 + x2) // 2), str((y1 + y2) // 2),
-    str(x1 + 5), str((y1 + y2) // 2), "400")
+adb("shell", "input", "swipe", str(x1 + 10), str((y1 + y2) // 2),
+    str((x1 + x2) // 2), str((y1 + y2) // 2), "400")
 time.sleep(1)
 out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
 scrub = re.findall(r"TENGOK-GAME-SCRUB mediaMs=(\d+)", out)
-if not scrub or int(scrub[-1]) > 5000:
+if not scrub or not (5000 <= int(scrub[-1]) <= 20000):
     shot("FAILED-midi-game-late")
-    print("timeline drag did not scrub near the start:", scrub)
+    print("timeline drag did not scrub into the song:", scrub)
     sys.exit(1)
-print("timeline scrubbed back to:", scrub[-1])
+print("timeline scrubbed to:", scrub[-1])
+need("/ 0:32")  # the clock follows the scrubbed position
 shot("05g-midi-game-scrub")
 tap("exit game", exact=True)
 need("MIDI format 1")
