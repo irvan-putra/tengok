@@ -132,6 +132,26 @@ public final class GameScoring {
         return best;
     }
 
+    /** Song-time (ms) of the track's latest note start; -1 when empty. */
+    public double lastStartMs() {
+        double last = -1;
+        for (int i = 0; i < noteIdx.length; i++) {
+            double s = noteStartMs(i);
+            if (s > last) last = s;
+        }
+        return last;
+    }
+
+    /** Notes whose timing came out non-finite or negative (a parse red flag). */
+    public int badTimeCount() {
+        int bad = 0;
+        for (int i = 0; i < noteIdx.length; i++) {
+            double s = noteStartMs(i);
+            if (!Double.isFinite(s) || s < 0) bad++;
+        }
+        return bad;
+    }
+
     /**
      * Index of the still-pending note that starts soonest, regardless of file
      * order (a track's events are not guaranteed to be time-ordered); -1 when

@@ -65,4 +65,20 @@ public class GameScoringTest {
         assertEquals(1, s.total());
         assertEquals(5000.0, s.firstStartMs(), 0.001);
     }
+
+    @Test
+    public void lastStartAndBadTimesDescribeThePart() {
+        GameScoring s = new GameScoring(song(12.0, 29.0, 12.5), 1);
+        assertEquals(29000.0, s.lastStartMs(), 0.001);
+        assertEquals(0, s.badTimeCount());
+        MidiFile m = song(3.0);
+        MidiFile.Note broken = new MidiFile.Note();
+        broken.track = 1;
+        broken.pitch = 60;
+        broken.startSec = Double.NaN;
+        broken.endSec = Double.NaN;
+        m.notes.add(broken);
+        GameScoring t = new GameScoring(m, 1);
+        assertEquals(1, t.badTimeCount());
+    }
 }

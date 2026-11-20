@@ -12,6 +12,8 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 
+import com.vanipy.tengok.DiagLog;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -61,7 +63,6 @@ public final class GameController {
     private boolean released;
     private boolean finished;
     private double frozenMs;
-    private boolean autoSeekPending;
     private int hintForNote = -1;
 
     private final Runnable ticker = new Runnable() {
@@ -146,8 +147,17 @@ public final class GameController {
         finished = false;
         waiting = false;
         frozenMs = 0;
-        autoSeekPending = true;
         hintForNote = -1;
+        // numbers only, no file or track names: lets a shared diagnostic log say
+        // whether a blank lane was a late entrance or something wrong in the times
+        Log.i(TAG, "TENGOK-GAME-NOTES track=" + userTrack + " count=" + scoring.total()
+                + " firstMs=" + (int) scoring.firstStartMs()
+                + " lastMs=" + (int) scoring.lastStartMs()
+                + " badTimes=" + scoring.badTimeCount());
+        DiagLog.log(ctx, "GAME-NOTES count=" + scoring.total()
+                + " firstMs=" + (int) scoring.firstStartMs()
+                + " lastMs=" + (int) scoring.lastStartMs()
+                + " badTimes=" + scoring.badTimeCount());
         byte[] bytes = MidiWriter.write(midi, Collections.singleton(userTrack), speed);
         File f = new File(ctx.getCacheDir(), "tengok-game-backing.mid");
         try (FileOutputStream out = new FileOutputStream(f)) {
@@ -162,16 +172,6 @@ public final class GameController {
             backing.setOnPreparedListener(mp -> {
                 prepared = true;
                 Log.i(TAG, "TENGOK-GAME-READY track=" + userTrack + " speed=" + speed);
-                // A part that enters late (a pad 40 s in, say) would otherwise
-                // show an empty lane while the backing plays from bar one.
-                // Start the round on a short runway before the player's first note.
-                if (autoSeekPending) {
-                    autoSeekPending = false;
-                    double first = scoring.firstStartMs();
-                    if (first > GAP_HINT_MS) {
-                        seekSongMs(first - RUNWAY_MS, "SEEK");
-                    }
-                }
             });
             backing.setOnCompletionListener(mp -> finishRound());
             backing.prepareAsync();
