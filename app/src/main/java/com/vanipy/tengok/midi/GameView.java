@@ -101,6 +101,17 @@ public final class GameView extends View {
         invalidate();
     }
 
+    /**
+     * Forces the next draw to re-emit the key-geometry line even when nothing
+     * moved. Debug-log contract: a round's wait can engage with the viewport
+     * already centered, and a harness that cleared its logs between rounds
+     * would otherwise have no fresh geometry to read.
+     */
+    public void relogKeys() {
+        keysLoggedW = -1;
+        invalidate();
+    }
+
     public void setStrikeListener(StrikeListener l) {
         listener = l;
     }

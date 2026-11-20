@@ -358,6 +358,7 @@ public final class GameController {
             try { backing.pause(); } catch (IllegalStateException ignored) { }
             playPause.setText("play");
             Log.i(TAG, "TENGOK-GAME-WAIT pitch=" + scoring.notePitch(next));
+            gameView.relogKeys(); // fresh geometry for the harness even when the wait moved nothing
         }
         // long empty stretch ahead (a late entrance or a mid-song rest): say so
         // on the lane and offer a tap-to-jump, instead of looking broken

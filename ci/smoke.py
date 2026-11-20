@@ -225,7 +225,12 @@ def pan_vs_strike_proof(pitch, keymap, failshot):
     # Phone report: keys squeezed to a few millimetres. Two proofs in one:
     # a sideways drag on the keys pans the board (vx moves) and NEVER strikes
     # a note (no TAP/STRIKE), then follow resumes and re-centers the note.
-    gk = vxkwd_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
+    gk = None
+    for _ in range(10):
+        gk = vxkwd_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
+        if gk is not None:
+            break
+        time.sleep(0.5)  # the app re-emits geometry when the wait engages
     if gk is None or gk[0] < 44:
         shot(failshot)
         print("white key width below the 44dp finger minimum:", gk)
