@@ -107,6 +107,12 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   let raf = 0;
   const flashes = new Map(); // pitch -> { t: performance.now(), grade }
   const pressed = new Set(); // pitches physically held right now
+  /* Judged-hit sparks: a short burst just above the hit line, where the
+   * striking finger does not cover it. Only judged hits (Perfect/Good)
+   * spark; a plain registered tap keeps the quiet dim/grey flash, so
+   * sparks always mean "that one scored". */
+  const SPARK_MS = 420;
+  const sparks = []; // { x, y, vx, vy, t, color }
 
   function nowSec() {
     return running ? offsetSec + (performance.now() - clockStart) / 1000 : offsetSec;
@@ -144,7 +150,24 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     const grade = scoring.strike(pitch, nowMs);
     ctx.synth.strike(pitch, 100, judgedProgram);
     flashes.set(pitch, { t: performance.now(), grade });
-    if (grade === G.PERFECT || grade === G.GOOD) updateHud();
+    if (grade === G.PERFECT || grade === G.GOOD) {
+      spawnSparks(pitch, grade);
+      updateHud();
+    }
+  }
+
+  function spawnSparks(pitch, grade) {
+    const x = (kw.leftPx(pitch) - vx)
+        + (G.isBlack(pitch) ? kw.blackW() : kw.whiteW) / 2;
+    const y = canvas.height - KEY_H - 4; // just above the hit line
+    const color = grade === G.PERFECT ? "255,216,77" : "155,225,93";
+    for (let i = 0; i < 10; i++) {
+      const a = (-160 + Math.random() * 140) * Math.PI / 180; // upward fan
+      const v = 0.14 + Math.random() * 0.30; // px per ms
+      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+          t: performance.now(), color });
+    }
+    while (sparks.length > 60) sparks.shift();
   }
 
   function updateHud() {
@@ -386,6 +409,21 @@ function runGame(viewArea, midi, trackIndex, ctx) {
         g.fillStyle = "rgba(255,255,255,0.40)";
         g.fillRect(x, kbY, bw, KEY_H * 0.62);
       }
+    }
+
+    /* judged-hit sparks above the hit line; physics integrate on the wall
+     * clock so frame rate changes smoothness, never positions */
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      const age = performance.now() - s.t;
+      if (age > SPARK_MS) { sparks.splice(i, 1); continue; }
+      const t = age / SPARK_MS;
+      const sx = s.x + s.vx * age;
+      const sy = s.y + s.vy * age + 0.0006 * age * age;
+      g.fillStyle = `rgba(${s.color},${(0.9 * (1 - t)).toFixed(3)})`;
+      g.beginPath();
+      g.arc(sx, sy, 2.6 - 1.4 * t, 0, Math.PI * 2);
+      g.fill();
     }
 
     /* pan hint arrows when the board extends past an edge */

@@ -12,6 +12,7 @@ import android.view.ViewConfiguration;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 /**
  * The falling-notes game view. Notes of the player's track drop toward an
@@ -74,6 +75,16 @@ public final class GameView extends View {
     private int flashGrade = 0;
     private long flashUntilMs = 0;
     private static final long FLASH_MS = 350;
+    /** Judged-hit celebration: a short spark burst just above the hit line,
+     *  where the striking finger does not cover it. Only judged hits spark;
+     *  a plain registered tap keeps the quiet dim/grey flash, so sparks
+     *  always mean "that one scored". */
+    private static final long SPARK_MS = 420;
+    private static final int SPARK_MAX = 60;
+    private static final int SPARKS_PER_HIT = 10;
+    /** x, y, vx (px/ms), vy (px/ms), born uptimeMs, color. */
+    private final ArrayList<float[]> sparks = new ArrayList<>();
+    private final Random sparkRng = new Random();
     private int candidatePitch = -1;
     private long downEventMs;
     private final int touchSlop;
@@ -342,6 +353,23 @@ public final class GameView extends View {
                 postInvalidateDelayed(30); // keep the fade animating
             }
         }
+
+        // judged-hit sparks above the hit line; physics integrate on the
+        // wall clock so frame rate changes smoothness, never positions.
+        if (!sparks.isEmpty()) {
+            float d = getResources().getDisplayMetrics().density;
+            for (int i = sparks.size() - 1; i >= 0; i--) {
+                float[] s = sparks.get(i);
+                float age = nowUp - s[4];
+                if (age > SPARK_MS) { sparks.remove(i); continue; }
+                float t = age / (float) SPARK_MS;
+                float x = s[0] + s[2] * age;
+                float y = s[1] + s[3] * age + 0.0006f * d * age * age;
+                paint.setColor(((int) ((1 - t) * 230) << 24) | ((int) s[5] & 0x00FFFFFF));
+                canvas.drawCircle(x, y, (2.6f - 1.4f * t) * d, paint);
+            }
+            if (!sparks.isEmpty()) postInvalidateDelayed(30);
+        }
         // scoring readout lives in the panel text under this view.
 
         int[] loc = new int[2];
@@ -453,7 +481,26 @@ public final class GameView extends View {
         flashPitch = pitch;
         flashGrade = grade;
         flashUntilMs = SystemClock.uptimeMillis() + FLASH_MS;
+        if (grade == GameScoring.PERFECT || grade == GameScoring.GOOD) {
+            spawnSparks(pitch, grade == GameScoring.PERFECT ? 0xFFFFD84D : 0xFF9BE15D);
+        }
         invalidate();
+    }
+
+    private void spawnSparks(int pitch, int color) {
+        RectF kr = keyRect(pitch);
+        float cx = kr.centerX();
+        float cy = kr.top - 4; // just above the hit line, clear of the finger
+        float d = getResources().getDisplayMetrics().density;
+        long born = SystemClock.uptimeMillis();
+        for (int i = 0; i < SPARKS_PER_HIT; i++) {
+            double a = Math.toRadians(-160 + sparkRng.nextFloat() * 140); // upward fan
+            float v = (0.14f + sparkRng.nextFloat() * 0.30f) * d;
+            sparks.add(new float[]{cx, cy,
+                    (float) (Math.cos(a) * v), (float) (Math.sin(a) * v), born, color});
+        }
+        while (sparks.size() > SPARK_MAX) sparks.remove(0);
+        postInvalidateDelayed(30);
     }
 
     private void strike(int pitch, long delayMs) {
