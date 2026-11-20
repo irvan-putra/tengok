@@ -94,7 +94,9 @@ jobs:
       candidate_apk_artifact: candidate-apk
 
   publish:
-    needs: candidate-bytes
+    # release must be a direct need for needs.release.outputs.version to
+    # resolve; the needs context covers direct dependencies only
+    needs: [candidate-bytes, release]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
