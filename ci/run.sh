@@ -6,7 +6,17 @@ if [ -n "${RELEASE_TAG:-}" ]; then
   mkdir -p /tmp/rel
   gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir /tmp/rel --pattern '*.apk' --pattern '*.sha256'
   (cd /tmp/rel && sha256sum -c ./*.sha256)
-  adb install -r /tmp/rel/tengok-v*.apk
+  if [ -n "${UPGRADE_FROM_TAG:-}" ]; then
+    # upgrade proof: the previous release goes on first and creates real
+    # user state; smoke.py then installs the candidate over it in place
+    mkdir -p /tmp/rel-prev
+    gh release download "$UPGRADE_FROM_TAG" --repo "$GITHUB_REPOSITORY" --dir /tmp/rel-prev --pattern '*.apk' --pattern '*.sha256'
+    (cd /tmp/rel-prev && sha256sum -c ./*.sha256)
+    adb install /tmp/rel-prev/tengok-v*.apk
+    export UPGRADE_PROOF=1
+  else
+    adb install -r /tmp/rel/tengok-v*.apk
+  fi
   # release bytes carry no debug fixture screen and run-as needs a debuggable
   # package: deliver the late-entrance fixture as a real user file instead
   python3 ci/make_latepad.py /tmp/latepad.mid

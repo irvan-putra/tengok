@@ -8,11 +8,16 @@
 # the debug smoke's late-entrance block.
 
 
+import glob
+
+
 def keymap_from(out):
+    # signed coordinates: keys left of the panned viewport log negative
+    # rectangles; an unsigned pattern never matches (see smoke.py)
     km = {}
-    keys = re.findall(r"TENGOK-GAME-KEYS((?: \d+:\d+,\d+,\d+)+)", out)
+    keys = re.findall(r"TENGOK-GAME-KEYS((?: -?\d+:-?\d+,-?\d+,\d+)+)", out)
     if keys:
-        for mm in re.finditer(r"(\d+):(\d+),(\d+),(\d+)", keys[-1]):
+        for mm in re.finditer(r"(-?\d+):(-?\d+),(-?\d+),(\d+)", keys[-1]):
             km[int(mm.group(1))] = ((int(mm.group(2)) + int(mm.group(3))) // 2, int(mm.group(4)))
     return km
 
@@ -58,6 +63,57 @@ def lane_tap(out):
 
 
 adb("shell", "logcat", "-c")
+
+if os.environ.get("UPGRADE_PROOF"):
+    # The previous release is installed and holds no state yet. Create the
+    # one piece of user state tengok keeps - a remembered folder with its
+    # persisted tree grant - then install the candidate over it in place and
+    # prove both survive: same signature, preferences and grants intact.
+    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+    time.sleep(2)
+    need("Open a file")
+    tap("Browse a folder")
+    time.sleep(3)
+    need("Download")
+    tap("Download")
+    time.sleep(2)
+    need("tengok-fixtures")
+    tap("tengok-fixtures")
+    time.sleep(2)
+    tap("Use this folder", exact=True)
+    if not wait_present("Allow", exact=True):
+        shot("FAILED-rel-upgrade-tree")
+        print("EXPECTED ON SCREEN: system allow dialog after USE THIS FOLDER")
+        sys.exit(1)
+    tap("Allow", exact=True)
+    time.sleep(2.5)
+    need("latepad.mid")  # browsing the folder on the previous release
+    shot("rel-00a-upgrade-before")
+    adb("shell", "am", "force-stop", PKG)
+    time.sleep(1)
+    cand = sorted(glob.glob("/tmp/rel/tengok-v*.apk"))
+    if not cand:
+        print("candidate APK missing under /tmp/rel")
+        sys.exit(1)
+    rr = adb("install", "-r", cand[0])
+    print("upgrade install:", rr.stdout.decode("utf-8", "replace").strip(),
+          rr.stderr.decode("utf-8", "replace").strip())
+    if rr.returncode or "Success" not in rr.stdout.decode("utf-8", "replace"):
+        shot("FAILED-rel-upgrade-install")
+        print("in-place upgrade install failed - signature or version regression")
+        sys.exit(1)
+    adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+    time.sleep(2.5)
+    tap("Browse a folder")
+    time.sleep(2.5)
+    # with state preserved there is no picker: the folder opens straight away
+    need("latepad.mid")
+    need("read-only")
+    shot("rel-00b-upgrade-preserved")
+    print("upgrade proof: remembered folder and its grant survived the in-place upgrade")
+
+# the remaining proofs want a fresh install state (the clear is a no-op
+# right after the upgrade proof's own clear)
 adb("shell", "pm", "clear", PKG)
 adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
 time.sleep(2)
@@ -154,7 +210,12 @@ if pitch != 60:
     shot("FAILED-rel-game")
     print("game did not wait for the 12 s entrance quickly, pitch:", pitch)
     sys.exit(1)
-gk = vxkwd_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
+gk = None
+for _ in range(10):
+    gk = vxkwd_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
+    if gk is not None:
+        break
+    time.sleep(0.5)  # the app re-emits geometry when the wait engages
 if gk is None or gk[0] < 44:
     shot("FAILED-rel-game-pan")
     print("published APK: white key width below the 44dp finger minimum:", gk)

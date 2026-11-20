@@ -7,6 +7,10 @@ on:
         description: "Optional release tag (e.g. v0.1.0). When set, tests that published APK instead of a debug build."
         required: false
         default: ""
+      upgrade_from_tag:
+        description: "Optional previous release tag (e.g. v0.3.1). With release_tag set, installs it first and proves user state survives the in-place upgrade."
+        required: false
+        default: ""
   push:
     branches: [main]
 
@@ -34,6 +38,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+          UPGRADE_FROM_TAG: ${{ inputs.upgrade_from_tag }}
           GH_TOKEN: ${{ github.token }}
         with:
           api-level: 34
