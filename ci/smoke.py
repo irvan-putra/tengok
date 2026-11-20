@@ -423,6 +423,182 @@ tap("exit game", exact=True)
 need("MIDI format 0")
 back()
 
+# ---- game mode: two fingers strike a chord together ----
+# Phone report: simultaneous notes only registered one key - the game view
+# tracked a single finger and ignored the rest. Drive a genuine two-pointer
+# stream through the kernel input device (sendevent MT protocol): both
+# fingers down together, the second lifts while the first still holds, and
+# BOTH keys must tap, strike and score. Pre-fix, the second finger never
+# even reached the view as a tap.
+def mt_probe():
+    out = adb("shell", "getevent", "-pl").stdout.decode("utf-8", "replace")
+    cur = None
+    slot = xmax = ymax = None
+    for line in out.splitlines():
+        m = re.match(r"add device \d+: (\S+)", line)
+        if m:
+            if cur and slot and xmax and ymax:
+                return cur, xmax, ymax
+            cur, slot, xmax, ymax = m.group(1), None, None, None
+            continue
+        if "ABS_MT_SLOT" in line:
+            slot = True
+        m = re.search(r"ABS_MT_POSITION_X.*max (\d+)", line)
+        if m:
+            xmax = int(m.group(1))
+        m = re.search(r"ABS_MT_POSITION_Y.*max (\d+)", line)
+        if m:
+            ymax = int(m.group(1))
+    if cur and slot and xmax and ymax:
+        return cur, xmax, ymax
+    return None
+
+
+def chord_hold(x1, y1, x2, y2, dev, xmax, ymax, scr_w, scr_h,
+               both_down_ms=500, held_extra_ms=2000):
+    rx = lambda x: int(round(x * xmax / max(1, scr_w - 1)))
+    ry = lambda y: int(round(y * ymax / max(1, scr_h - 1)))
+    script = (
+        f"sendevent {dev} 3 47 0; sendevent {dev} 3 57 301; "
+        f"sendevent {dev} 3 53 {rx(x1)}; sendevent {dev} 3 54 {ry(y1)}; "
+        f"sendevent {dev} 1 330 1; sendevent {dev} 0 0 0; "
+        "sleep 0.15; "
+        f"sendevent {dev} 3 47 1; sendevent {dev} 3 57 302; "
+        f"sendevent {dev} 3 53 {rx(x2)}; sendevent {dev} 3 54 {ry(y2)}; "
+        f"sendevent {dev} 0 0 0; "
+        f"sleep {both_down_ms / 1000}; "
+        f"sendevent {dev} 3 47 1; sendevent {dev} 3 57 4294967295; "
+        f"sendevent {dev} 0 0 0; "
+        f"sleep {held_extra_ms / 1000}; "
+        f"sendevent {dev} 3 47 0; sendevent {dev} 3 57 4294967295; "
+        f"sendevent {dev} 1 330 0; sendevent {dev} 0 0 0"
+    )
+    return subprocess.Popen(["adb", "shell", script],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+
+tap("MIDI: chord song")
+need("MIDI format 0")
+tap("Game", exact=True)
+time.sleep(2)
+ready = None
+keymap = {}
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.search(r"TENGOK-GAME-READY track=(\d+)", out)
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    if m:
+        ready = m.group(1)
+        if keymap:
+            break
+    time.sleep(0.5)
+if ready is None or not keymap:
+    shot("FAILED-midi-game-chord")
+    print("chord game never became ready:", ready, len(keymap))
+    sys.exit(1)
+tap("wait for me: off", exact=True)  # toggles wait mode ON
+adb("shell", "logcat", "-c")
+tap("play", exact=True)
+pitch = None
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    m = re.search(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
+    if m:
+        pitch = int(m.group(1))
+        break
+    time.sleep(0.5)
+mt = mt_probe()
+ws = adb("shell", "wm", "size").stdout.decode("utf-8", "replace")
+m = re.search(r"(\d+)x(\d+)", ws)
+scr_w, scr_h = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+if (pitch != 36 or 36 not in keymap or 40 not in keymap or mt is None
+        or not scr_w):
+    shot("FAILED-midi-game-chord")
+    print("chord setup missing: wait pitch", pitch, "keymap 36/40",
+          36 in keymap, 40 in keymap, "mt device", mt, "screen", ws.strip())
+    sys.exit(1)
+x1, y1 = keymap[36]
+x2, y2 = keymap[40]
+if not (0 < x1 < scr_w and 0 < x2 < scr_w):
+    shot("FAILED-midi-game-chord")
+    print("chord keys not both on screen:", x1, x2, "screen", scr_w)
+    sys.exit(1)
+adb("shell", "logcat", "-c")
+proc = chord_hold(x1, y1, x2, y2, *mt, scr_w, scr_h)
+time.sleep(0.6)  # both struck by grace; second finger up; first still holding
+shot("16-chord-held")
+proc.wait(timeout=20)
+time.sleep(1)
+out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+taps = re.findall(r"TENGOK-GAME-TAP pitch=(\d+)", out)
+strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
+if not ("36" in taps and "40" in taps):
+    shot("FAILED-midi-game-chord")
+    print("chord did not reach the view as TWO key taps:", taps)
+    sys.exit(1)
+if not (any(p_ == "36" and g in ("1", "2") for p_, g in strikes)
+        and any(p_ == "40" and g in ("1", "2") for p_, g in strikes)):
+    shot("FAILED-midi-game-chord")
+    print("chord keys did not both score:", strikes)
+    sys.exit(1)
+print("chord: two fingers held, one released, both keys scored:", strikes)
+# the round still completes: the single note after the chord scores too
+pitch = None
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    events = list(re.finditer(r"TENGOK-GAME-(WAIT|STRIKE) pitch=(\d+)", out))
+    last_strike = max((i for i, e in enumerate(events)
+                       if e.group(1) == "STRIKE"), default=-1)
+    after = [e for e in events[last_strike + 1:] if e.group(1) == "WAIT"]
+    if after:
+        pitch = int(after[0].group(2))
+        break
+    time.sleep(0.5)
+if pitch != 38 or 38 not in keymap:
+    shot("FAILED-midi-game-chord")
+    print("game never waited for the note after the chord:", pitch)
+    sys.exit(1)
+x, y = keymap[38]
+adb("shell", "input", "tap", str(x), str(y))
+time.sleep(1.5)
+out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
+if not any(p_ == "38" and g in ("1", "2") for p_, g in strikes):
+    shot("FAILED-midi-game-chord")
+    print("the note after the chord did not score:", strikes)
+    sys.exit(1)
+score = None
+for _ in range(6):
+    for n in nodes():
+        m = re.match(
+            r"perfect (\d+) · good (\d+) · miss (\d+) · streak (\d+) · rank (\S+)",
+            n.get("text") or "")
+        if m:
+            score = m
+            break
+    if score:
+        break
+    time.sleep(1)
+if (not score or int(score.group(1)) + int(score.group(2)) != 3
+        or score.group(3) != "0" or score.group(4) != "3"):
+    shot("FAILED-midi-game-chord-score")
+    print("chord round must judge all 3 notes, 0 miss, streak 3; got:",
+          score.group(0) if score else None)
+    sys.exit(1)
+print("chord round judged all three notes:", score.group(0))
+shot("16b-chord-done")
+tap("exit game", exact=True)
+need("MIDI format 0")
+back()
+
 # ---- game on a late-entrance part: empty-lane hint, tap-to-skip ----
 # The pad enters at 12 s, plays at 12.5 s, then rests until 29 s. Before this
 # fix the lane stayed blank through those stretches with no explanation - the

@@ -35,6 +35,7 @@ public class FixtureActivity extends Activity {
         addButton(column, "MIDI: two-track song, tempo change", "song.mid", FixtureActivity::songMid);
         addButton(column, "MIDI: long walk, auto-follow", "longwalk.mid", FixtureActivity::longWalkMid);
         addButton(column, "MIDI: late entrance and gap", "latepad.mid", FixtureActivity::latePadMid);
+        addButton(column, "MIDI: chord song", "chord.mid", FixtureActivity::chordMid);
         addButton(column, "MIDI: corrupt file", "corrupt.mid", FixtureActivity::corruptMid);
         addButton(column, "Text: hello", "hello.txt", FixtureActivity::helloTxt);
         addButton(column, "Hex: random blob", "blob.bin", FixtureActivity::blob);
@@ -86,6 +87,23 @@ public class FixtureActivity extends Activity {
             event(track, 0, 0x90, p, 96);
             event(track, 480, 0x80, p, 0);
         }
+        metaEnd(track, 0);
+        return smf(0, 480, new byte[][]{track.toByteArray()});
+    }
+
+    /** Format 0: a two-note chord, then a single note - the multitouch song. */
+    static byte[] chordMid() throws IOException {
+        ByteArrayOutputStream track = new ByteArrayOutputStream();
+        metaText(track, 0, 0x03, "chords");
+        metaTempo(track, 0, 500000); // 120 bpm: a quarter (480 ticks) is 0.5 s
+        metaTimeSig(track, 0, 4, 4);
+        event(track, 0, 0xC0, 0, -1); // program 0: acoustic grand
+        event(track, 0, 0x90, 36, 96);  // C2 with...
+        event(track, 0, 0x90, 40, 96);  // ...E2: the same onset - a real chord
+        event(track, 480, 0x80, 36, 0);
+        event(track, 0, 0x80, 40, 0);
+        event(track, 480, 0x90, 38, 96); // D2 alone, after the chord
+        event(track, 480, 0x80, 38, 0);
         metaEnd(track, 0);
         return smf(0, 480, new byte[][]{track.toByteArray()});
     }
