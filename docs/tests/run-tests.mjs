@@ -242,7 +242,7 @@ test("wav encoder: RIFF header and frame count", () => {
   assert.equal(wav.length, 44 + 16);
   assert.equal(dv.getInt16(44, true), 0); // left[0]
   assert.equal(dv.getInt16(46, true), 32767); // right[0] = 1.0
-  assert.equal(dv.getInt16(52, true), -16384); // frame 2 left = -0.5
+  assert.equal(dv.getInt16(52, true), -16383); // frame 2 left = -0.5 (rounds to zero on .5)
 });
 test("wav encoder: clips out-of-range samples", () => {
   const wav = C.encodeWav([new Float32Array([2, -2])], 8000);
