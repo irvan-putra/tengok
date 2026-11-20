@@ -185,8 +185,10 @@ public class ExplorerActivity extends Activity {
                     }
                 }
             } catch (SecurityException se) {
+                DiagLog.log(ExplorerActivity.this, "ERR explorer op=list ex=" + se.getClass().getName());
                 error = "access to this folder expired - tap Change above to pick it again";
             } catch (RuntimeException re) {
+                DiagLog.log(ExplorerActivity.this, "ERR explorer op=list ex=" + re.getClass().getName());
                 error = "this folder couldn't be read: " + re.getClass().getSimpleName();
             }
             entries.sort((a, b) -> a.isDir != b.isDir ? (a.isDir ? -1 : 1)
