@@ -322,7 +322,26 @@ GESTURES = [
 # on pre-fix code, so the wobble - the gesture that actually distinguishes
 # old from new - never ran.)
 failed_gestures = []
-for label, gesture in GESTURES:
+for gi, (label, gesture) in enumerate(GESTURES):
+    if gi > 0:
+        # The previous strike advanced the song: wait for the next note's
+        # wait state and re-read geometry instead of tapping stale coords.
+        adb("shell", "logcat", "-c")
+        pitch = None
+        for _ in range(40):
+            out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+            km = keymap_from(out)
+            if km:
+                keymap = km
+            m = re.search(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
+            if m:
+                pitch = int(m.group(1))
+                break
+            time.sleep(0.5)
+        if pitch is None or pitch not in keymap:
+            shot("FAILED-midi-game")
+            print("game never waited for another note before", label, "- pitch:", pitch)
+            sys.exit(1)
     x, y = keymap[pitch]
     adb("shell", "logcat", "-c")
     gesture(x, y)
