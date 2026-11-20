@@ -269,6 +269,156 @@ tap("exit game", exact=True)
 need("MIDI format 0")
 back()
 
+# ---- game on a late-entrance part: lead-in jump, empty-lane hint, tap-to-skip ----
+# The pad enters at 12 s, plays at 12.5 s, then rests until 29 s. Without the
+# lead-in jump the lane would stay blank for the first 9 s of playback - the
+# exact "empty game lane" failure reported from a phone on a late-entering pad.
+def game_geometry(out):
+    m = re.findall(r"\| w=(\d+) h=(\d+) loc=(\d+),(\d+) kb=(\d+)", out)
+    if not m:
+        return None
+    w, h, lx, ly, kb = map(int, m[-1])
+    return w, h, lx, ly, kb
+
+def strike_until_scored(pitch, keymap):
+    for attempt in range(2):
+        x, y = keymap[pitch]
+        adb("shell", "input", "tap", str(x), str(y))
+        time.sleep(1.2)
+        out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+        strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
+        if any(int(p_) == pitch and int(g) in (1, 2) for p_, g in strikes):
+            return out, strikes
+        km = keymap_from(out)
+        if km:
+            keymap = km
+    shot("FAILED-midi-game-late")
+    print("tap on the waiting key did not score: pitch", pitch, "strikes:", strikes)
+    sys.exit(1)
+
+adb("shell", "logcat", "-c")
+tap("MIDI: late entrance and gap")
+need("MIDI format 1")
+tap("Game", exact=True)
+time.sleep(1)
+tap("pad (3 notes)")  # the part picker: bass plays from bar one, pad enters late
+time.sleep(2)
+ready = None
+keymap = {}
+seek = None
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.search(r"TENGOK-GAME-READY track=(\d+)", out)
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    s = re.search(r"TENGOK-GAME-SEEK mediaMs=(\d+) songMs=(\d+)", out)
+    if s:
+        seek = (int(s.group(1)), int(s.group(2)))
+    if m:
+        ready = m.group(1)
+        if keymap and seek:
+            break
+    time.sleep(0.5)
+if ready is None or not keymap:
+    shot("FAILED-midi-game-late")
+    print("late-entrance game never became ready:", ready, len(keymap))
+    sys.exit(1)
+if not seek or not (8000 <= seek[0] <= 12000):
+    shot("FAILED-midi-game-late")
+    print("game did not jump to the first note's runway (expected ~10 s in):", seek)
+    sys.exit(1)
+print("lead-in jump landed:", seek, "track", ready)
+shot("05d-midi-game-lane")  # first pad note visible on the runway, not a blank lane
+tap("wait for me: off", exact=True)  # toggles wait mode ON
+adb("shell", "logcat", "-c")
+tap("play", exact=True)
+pitch = None
+for _ in range(30):  # 12 s entrance on a 10 s runway: the wait must come in ~2 s, not 12 s
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    m = re.search(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
+    if m:
+        pitch = int(m.group(1))
+        break
+    time.sleep(0.5)
+if pitch != 60:
+    shot("FAILED-midi-game-late")
+    print("game did not wait for the 12 s entrance quickly, pitch:", pitch)
+    sys.exit(1)
+out, _ = strike_until_scored(60, keymap)
+km = keymap_from(out)
+if km:
+    keymap = km
+pitch = None
+for _ in range(20):  # second pad note at 12.5 s
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.findall(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
+    if len(m) >= 2:
+        pitch = int(m[-1])
+        break
+    time.sleep(0.5)
+if pitch != 64:
+    shot("FAILED-midi-game-late")
+    print("game did not wait for the 12.5 s note, pitch:", pitch)
+    sys.exit(1)
+out, _ = strike_until_scored(64, keymap)
+km = keymap_from(out)
+if km:
+    keymap = km
+# now the 16 s rest: the lane must announce the gap instead of staring blank
+hint = None
+for _ in range(20):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.search(r"TENGOK-GAME-HINT nextSongMs=(\d+)", out)
+    if m:
+        hint = int(m.group(1))
+        break
+    time.sleep(0.5)
+if hint is None or not (27000 <= hint <= 31000):
+    shot("FAILED-midi-game-late")
+    print("no empty-lane hint for the 29 s note:", hint)
+    sys.exit(1)
+print("gap hint announced for the 29 s note:", hint)
+shot("05e-midi-game-gap")  # the hint text is canvas-drawn; this proves the pixels
+g = game_geometry(out)
+if g:
+    w, h, lx, ly, kb = g
+    adb("shell", "input", "tap", str(lx + w // 2), str(ly + int(h * 0.4)))
+else:
+    adb("shell", "input", "tap", "540", "800")
+time.sleep(1)
+out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+skip = re.search(r"TENGOK-GAME-SKIP mediaMs=(\d+)", out)
+if not skip or not (25000 <= int(skip.group(1)) <= 29000):
+    shot("FAILED-midi-game-late")
+    print("lane tap did not skip to the runway of the 29 s note:", skip)
+    sys.exit(1)
+print("tap-to-skip landed:", skip.group(1))
+pitch = None
+for _ in range(20):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    m = re.findall(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
+    if len(m) >= 3:
+        pitch = int(m[-1])
+        break
+    time.sleep(0.5)
+if pitch != 67:
+    shot("FAILED-midi-game-late")
+    print("game did not wait for the 29 s note after the skip, pitch:", pitch)
+    sys.exit(1)
+strike_until_scored(67, keymap)
+need("done!")
+shot("05f-midi-game-done")
+tap("exit game", exact=True)
+need("MIDI format 1")
+back()
+
 # ---- corrupt MIDI fails with a readable error, hex offered ----
 tap("MIDI: corrupt file")
 need("can't read this MIDI file")

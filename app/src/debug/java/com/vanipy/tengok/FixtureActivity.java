@@ -34,6 +34,7 @@ public class FixtureActivity extends Activity {
         addButton(column, "MIDI: C major scale", "scale.mid", FixtureActivity::scaleMid);
         addButton(column, "MIDI: two-track song, tempo change", "song.mid", FixtureActivity::songMid);
         addButton(column, "MIDI: long walk, auto-follow", "longwalk.mid", FixtureActivity::longWalkMid);
+        addButton(column, "MIDI: late entrance and gap", "latepad.mid", FixtureActivity::latePadMid);
         addButton(column, "MIDI: corrupt file", "corrupt.mid", FixtureActivity::corruptMid);
         addButton(column, "Text: hello", "hello.txt", FixtureActivity::helloTxt);
         addButton(column, "Hex: random blob", "blob.bin", FixtureActivity::blob);
@@ -138,6 +139,41 @@ public class FixtureActivity extends Activity {
         }
         metaEnd(track, 0);
         return smf(0, 480, new byte[][]{track.toByteArray()});
+    }
+
+    /**
+     * Format 1: a bass line that plays from bar one, and a pad that enters at
+     * 12 s, plays again at 12.5 s, then rests until 29 s. Exercises the game's
+     * lead-in jump, the empty-lane hint and the tap-to-skip on a long rest.
+     */
+    static byte[] latePadMid() throws IOException {
+        ByteArrayOutputStream t0 = new ByteArrayOutputStream();
+        metaText(t0, 0, 0x03, "tempo");
+        metaTempo(t0, 0, 500000); // 120 bpm: a quarter (480 ticks) is 0.5 s
+        metaTimeSig(t0, 0, 4, 4);
+        metaEnd(t0, 0);
+
+        ByteArrayOutputStream t1 = new ByteArrayOutputStream();
+        metaText(t1, 0, 0x03, "bass");
+        event(t1, 0, 0xC1, 32, -1); // acoustic bass
+        for (int i = 0; i < 32; i++) { // one note a second, 0..31 s
+            event(t1, 0, 0x91, 36 + (i % 5), 90);
+            event(t1, 960, 0x81, 36 + (i % 5), 0);
+        }
+        metaEnd(t1, 0);
+
+        ByteArrayOutputStream t2 = new ByteArrayOutputStream();
+        metaText(t2, 0, 0x03, "pad");
+        event(t2, 0, 0xC2, 89, -1); // warm pad
+        event(t2, 11520, 0x92, 60, 80);  // 12.0 s: first entrance, after 12 s of bass only
+        event(t2, 480, 0x82, 60, 0);
+        event(t2, 0, 0x92, 64, 80);      // 12.5 s
+        event(t2, 480, 0x82, 64, 0);
+        event(t2, 15360, 0x92, 67, 80);  // 29.0 s: a 16 s rest in between
+        event(t2, 480, 0x82, 67, 0);
+        metaEnd(t2, 0);
+
+        return smf(1, 480, new byte[][]{t0.toByteArray(), t1.toByteArray(), t2.toByteArray()});
     }
 
     static byte[] corruptMid() {

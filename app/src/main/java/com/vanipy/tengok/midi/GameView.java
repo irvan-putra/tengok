@@ -31,6 +31,10 @@ public final class GameView extends View {
         void onStrike(int pitch);
     }
 
+    public interface SkipListener {
+        void onSkip();
+    }
+
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
     private final List<MidiFile.Note> notes = new ArrayList<>();
@@ -40,6 +44,8 @@ public final class GameView extends View {
     private int loPitch = 48;
     private int hiPitch = 72;
     private double nowMs;
+    private double gapHintSec = -1;
+    private SkipListener skipListener;
     private int keysLoggedW = -1;
     private int keysLoggedH = -1;
     private int keysLoggedX = -1;
@@ -69,6 +75,15 @@ public final class GameView extends View {
 
     public void setStrikeListener(StrikeListener l) {
         listener = l;
+    }
+
+    public void setSkipListener(SkipListener l) {
+        skipListener = l;
+    }
+
+    /** Seconds until the next note during a long empty stretch; negative hides the hint. */
+    public void setGapHint(double sec) {
+        gapHintSec = sec;
     }
 
     public void setNow(double ms) {
@@ -145,6 +160,16 @@ public final class GameView extends View {
         paint.setColor(0xFF1F2A5C);
         canvas.drawRect(0, hitY - 2, w, hitY, paint);
 
+        // long empty stretch: say what is coming instead of looking broken
+        if (gapHintSec > 0) {
+            String hint = "next note in " + (long) Math.ceil(gapHintSec) + " s - tap to jump";
+            paint.setColor(0xFF8A90A2);
+            paint.setTextSize(getResources().getDisplayMetrics().density * 15);
+            paint.setTextAlign(Paint.Align.CENTER);
+            canvas.drawText(hint, w / 2.0f, hitY * 0.4f, paint);
+            paint.setTextAlign(Paint.Align.LEFT);
+        }
+
         // keyboard: whites, then blacks on top
         int whiteCount = whitesUpTo(loPitch, hiPitch);
         float whiteW = (float) w / whiteCount;
@@ -195,7 +220,11 @@ public final class GameView extends View {
         if (e.getAction() != MotionEvent.ACTION_DOWN) return true;
         float x = e.getX();
         float y = e.getY();
-        if (y < getHeight() - keyboardH()) return true;
+        if (y < getHeight() - keyboardH()) {
+            // the lane itself: only meaningful while a skip is on offer
+            if (gapHintSec > 0 && skipListener != null) skipListener.onSkip();
+            return true;
+        }
         // black keys win over whites where they overlap
         for (int p = loPitch; p <= hiPitch; p++) {
             if (!isBlack(p)) continue;

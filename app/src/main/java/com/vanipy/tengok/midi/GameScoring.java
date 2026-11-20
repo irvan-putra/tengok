@@ -122,6 +122,35 @@ public final class GameScoring {
         return midi.notes.get(noteIdx[i]).startSec * 1000.0;
     }
 
+    /** Song-time (ms) of the track's earliest note, wherever it sits in the song; -1 when empty. */
+    public double firstStartMs() {
+        double best = -1;
+        for (int i = 0; i < noteIdx.length; i++) {
+            double s = noteStartMs(i);
+            if (best < 0 || s < best) best = s;
+        }
+        return best;
+    }
+
+    /**
+     * Index of the still-pending note that starts soonest, regardless of file
+     * order (a track's events are not guaranteed to be time-ordered); -1 when
+     * every note has been judged.
+     */
+    public int nextPendingIndex() {
+        int best = -1;
+        double bestMs = 0;
+        for (int i = 0; i < noteIdx.length; i++) {
+            if (state[i] != PENDING) continue;
+            double s = noteStartMs(i);
+            if (best < 0 || s < bestMs) {
+                bestMs = s;
+                best = i;
+            }
+        }
+        return best;
+    }
+
     public int notePitch(int i) {
         if (i < 0 || i >= noteIdx.length) return -1;
         return midi.notes.get(noteIdx[i]).pitch;

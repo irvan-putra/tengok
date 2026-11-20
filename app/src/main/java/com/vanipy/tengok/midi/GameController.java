@@ -28,6 +28,10 @@ import java.util.Set;
  */
 public final class GameController {
     private static final String TAG = "tengok";
+    /** Runway left before a note when the game jumps forward, ms of song time. */
+    private static final double RUNWAY_MS = 2000;
+    /** Gaps longer than this offer a skip instead of an empty lane. */
+    private static final double GAP_HINT_MS = 4000;
 
     public interface ExitListener {
         void onExitGame();
@@ -57,6 +61,8 @@ public final class GameController {
     private boolean released;
     private boolean finished;
     private double frozenMs;
+    private boolean autoSeekPending;
+    private int hintForNote = -1;
 
     private final Runnable ticker = new Runnable() {
         @Override
@@ -105,6 +111,7 @@ public final class GameController {
         root.addView(scoreLine);
 
         gameView.setStrikeListener(this::onStrike);
+        gameView.setSkipListener(this::onSkipToNext);
         playPause.setOnClickListener(v -> togglePlay());
         speedButton.setOnClickListener(v -> cycleSpeed());
         waitButton.setOnClickListener(v -> toggleWait());
@@ -139,6 +146,8 @@ public final class GameController {
         finished = false;
         waiting = false;
         frozenMs = 0;
+        autoSeekPending = true;
+        hintForNote = -1;
         byte[] bytes = MidiWriter.write(midi, Collections.singleton(userTrack), speed);
         File f = new File(ctx.getCacheDir(), "tengok-game-backing.mid");
         try (FileOutputStream out = new FileOutputStream(f)) {
@@ -153,6 +162,16 @@ public final class GameController {
             backing.setOnPreparedListener(mp -> {
                 prepared = true;
                 Log.i(TAG, "TENGOK-GAME-READY track=" + userTrack + " speed=" + speed);
+                // A part that enters late (a pad 40 s in, say) would otherwise
+                // show an empty lane while the backing plays from bar one.
+                // Start the round on a short runway before the player's first note.
+                if (autoSeekPending) {
+                    autoSeekPending = false;
+                    double first = scoring.firstStartMs();
+                    if (first > GAP_HINT_MS) {
+                        seekSongMs(first - RUNWAY_MS, "SEEK");
+                    }
+                }
             });
             backing.setOnCompletionListener(mp -> finishRound());
             backing.prepareAsync();
@@ -220,33 +239,71 @@ public final class GameController {
         updateScoreLine();
     }
 
+    /**
+     * Song time runs on the written score: the backing file's tempo map is
+     * scaled by 1/speed, so a media position p corresponds to score time
+     * p*speed. View, scoring and freeze logic all live on the score clock,
+     * which keeps the falling notes on the music at every speed.
+     */
     private double clockMs() {
         if (waiting) return frozenMs;
         if (backing == null || !prepared) return 0;
         try {
-            return backing.getCurrentPosition();
+            return backing.getCurrentPosition() * speed;
         } catch (IllegalStateException e) {
             return 0;
         }
     }
 
+    /** Moves the backing so the score clock reads songMs, and logs it. */
+    private void seekSongMs(double songMs, String marker) {
+        if (backing == null || !prepared) return;
+        int mediaMs = (int) Math.max(0, Math.round(songMs / speed));
+        try {
+            backing.seekTo(mediaMs);
+            Log.i(TAG, "TENGOK-GAME-" + marker + " mediaMs=" + mediaMs
+                    + " songMs=" + (int) songMs + " speed=" + speed);
+        } catch (IllegalStateException ignored) {
+        }
+    }
+
+    /** Lane tap while a long gap is announced: jump to just before the next note. */
+    private void onSkipToNext() {
+        if (released || scoring == null || waiting || finished) return;
+        int next = scoring.nextPendingIndex();
+        if (next < 0) return;
+        double nextMs = scoring.noteStartMs(next);
+        if (nextMs - clockMs() <= GAP_HINT_MS) return;
+        seekSongMs(nextMs - RUNWAY_MS, "SKIP");
+        gameView.setGapHint(-1);
+        hintForNote = -1;
+    }
+
     private void tick() {
         if (scoring == null) return;
         double now = clockMs();
+        int next = scoring.nextPendingIndex();
+        double nextMs = next < 0 ? -1 : scoring.noteStartMs(next);
         // wait mode: freeze the clock just before the next unplayed note
-        if (waitMode && !waiting && prepared && backing != null && backing.isPlaying()) {
-            for (int i = 0; i < scoring.total(); i++) {
-                if (scoring.stateOf(i) != GameScoring.PENDING) continue;
-                double start = scoring.noteStartMs(i);
-                if (start >= 0 && now >= start - 30) {
-                    waiting = true;
-                    frozenMs = start;
-                    try { backing.pause(); } catch (IllegalStateException ignored) { }
-                    playPause.setText("play");
-                    Log.i(TAG, "TENGOK-GAME-WAIT pitch=" + scoring.notePitch(i));
-                }
-                break;
+        if (waitMode && !waiting && prepared && backing != null && backing.isPlaying()
+                && nextMs >= 0 && now >= nextMs - 30) {
+            waiting = true;
+            frozenMs = nextMs;
+            try { backing.pause(); } catch (IllegalStateException ignored) { }
+            playPause.setText("play");
+            Log.i(TAG, "TENGOK-GAME-WAIT pitch=" + scoring.notePitch(next));
+        }
+        // long empty stretch ahead (a late entrance or a mid-song rest): say so
+        // on the lane and offer a tap-to-jump, instead of looking broken
+        if (!waiting && nextMs >= 0 && nextMs - now > GAP_HINT_MS) {
+            gameView.setGapHint((nextMs - now) / 1000.0);
+            if (hintForNote != next) {
+                hintForNote = next;
+                Log.i(TAG, "TENGOK-GAME-HINT nextSongMs=" + (int) nextMs + " nowMs=" + (int) now);
             }
+        } else {
+            gameView.setGapHint(-1);
+            hintForNote = -1;
         }
         if (!waiting) {
             scoring.tick(now);
