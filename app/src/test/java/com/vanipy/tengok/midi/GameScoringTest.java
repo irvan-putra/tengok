@@ -45,7 +45,7 @@ public class GameScoringTest {
         GameScoring s = new GameScoring(song(12.0, 13.0, 30.0), 1);
         s.strike(60, 12000); // perfect on the first
         assertEquals(1, s.nextPendingIndex());
-        s.tick(13401); // second note's late window closes -> miss
+        s.tick(13801); // second note's bar leaves the line -> miss
         assertEquals(2, s.nextPendingIndex());
         s.strike(60, 30000);
         assertEquals(-1, s.nextPendingIndex());
@@ -89,11 +89,11 @@ public class GameScoringTest {
         GameScoring s = new GameScoring(song(12.0, 13.0, 14.0, 15.0), 1);
         s.strike(60, 12000); // perfect: 100% + streak 1
         assertEquals("SSS", s.rankLive());
-        s.tick(13401); // the 13 s note's window closes: accuracy halves, streak resets
+        s.tick(13801); // the 13 s note's bar leaves: accuracy halves, streak resets
         assertEquals("C", s.rankLive());
         s.strike(60, 14000); // perfect: 66% + streak 1
         assertEquals("B", s.rankLive());
-        s.tick(15401); // the last note slips: 50% + best-streak-1 bonus
+        s.tick(15801); // the last note's bar leaves: 50% + best-streak-1 bonus
         assertEquals("C", s.rankFinal());
     }
 
@@ -126,9 +126,42 @@ public class GameScoringTest {
     }
 
     @Test
-    public void tapPastTheLateWindowFindsNoNote() {
+    public void tapDuringTheSustainStillScores() {
+        // 401 ms past the onset the Good-onset window has closed, but the
+        // bar (end 12.4 s) is still on the line: the note must score.
         GameScoring s = new GameScoring(song(12.0), 1);
-        assertEquals(GameScoring.PENDING, s.strike(60, 12000 + GameScoring.GOOD_LATE_MS + 1));
+        assertEquals(GameScoring.GOOD, s.strike(60, 12000 + GameScoring.GOOD_LATE_MS + 1));
+    }
+
+    @Test
+    public void tapAfterTheBarIsGoneFindsNoNote() {
+        GameScoring s = new GameScoring(song(12.0), 1); // end 12.4 s
+        assertEquals(GameScoring.PENDING,
+                s.strike(60, 12400 + GameScoring.GOOD_LATE_MS + 1));
+    }
+
+    @Test
+    public void longNoteStaysHittableForItsWholeSustain() {
+        MidiFile m = new MidiFile();
+        MidiFile.Note pad = new MidiFile.Note();
+        pad.track = 1;
+        pad.pitch = 60;
+        pad.velocity = 90;
+        pad.startSec = 12.0;
+        pad.endSec = 20.0; // an 8 s warm pad, the cantina case
+        m.notes.add(pad);
+        GameScoring s = new GameScoring(m, 1);
+        s.tick(15000); // 3 s into the sustain: not a miss while the bar sits on the line
+        assertEquals(0, s.miss());
+        assertEquals(GameScoring.GOOD, s.strike(60, 15000)); // caught mid-sustain
+        assertEquals(0, s.perfect());
+        assertEquals(1, s.good());
+        GameScoring untouched = new GameScoring(m, 1);
+        untouched.tick(20400); // end + GOOD_LATE_MS, edge: still pending
+        assertEquals(0, untouched.miss());
+        untouched.tick(20401); // bar gone: now it misses
+        assertEquals(1, untouched.miss());
+        assertEquals(GameScoring.PENDING, untouched.strike(60, 20401));
     }
 
     @Test
@@ -148,11 +181,13 @@ public class GameScoringTest {
     }
 
     @Test
-    public void missClosesOnlyAfterTheLateWindow() {
-        GameScoring s = new GameScoring(song(12.0), 1);
+    public void missClosesOnlyAfterTheBarLeaves() {
+        GameScoring s = new GameScoring(song(12.0), 1); // end 12.4 s
         s.tick(12000 + GameScoring.GOOD_LATE_MS);
-        assertEquals(0, s.miss()); // still hittable while the bar is leaving
-        s.tick(12000 + GameScoring.GOOD_LATE_MS + 1);
+        assertEquals(0, s.miss()); // mid-sustain: the bar is still on the line
+        s.tick(12400 + GameScoring.GOOD_LATE_MS);
+        assertEquals(0, s.miss()); // still hittable at the very edge
+        s.tick(12400 + GameScoring.GOOD_LATE_MS + 1);
         assertEquals(1, s.miss());
     }
 }
