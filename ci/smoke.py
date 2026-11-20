@@ -317,7 +317,11 @@ GESTURES = [
     ("stationary tap",
      lambda x, y: adb("shell", "input", "tap", str(x), str(y))),
 ]
-scored = False
+# Every gesture must independently strike and score. (A first-hit break once
+# let an easy gesture mask a real regression: the vertical roll succeeds even
+# on pre-fix code, so the wobble - the gesture that actually distinguishes
+# old from new - never ran.)
+failed_gestures = []
 for label, gesture in GESTURES:
     x, y = keymap[pitch]
     adb("shell", "logcat", "-c")
@@ -332,15 +336,17 @@ for label, gesture in GESTURES:
         sys.exit(1)
     strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
     if any(int(p_) == pitch and int(g) in (1, 2) for p_, g in strikes):
-        scored = True
         print(label, "struck and scored:", strikes)
-        break
+    else:
+        failed_gestures.append(label)
+        print(label, "reached the view but never struck:", strikes)
     km = keymap_from(out)  # fresh geometry may have landed after the wait began
     if km:
         keymap = km
-if not scored:
+    time.sleep(3)  # outlast any pan hold before the next gesture
+if failed_gestures:
     shot("FAILED-midi-game")
-    print("no gesture scored on the waiting key: pitch", pitch, "strikes:", strikes)
+    print("gestures that failed to score on the waiting key:", failed_gestures)
     sys.exit(1)
 time.sleep(3)  # outlast any manual pan hold; follow re-centers the next note
 keymap = keymap_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")) or keymap
