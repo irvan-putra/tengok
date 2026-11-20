@@ -47,6 +47,19 @@ music.
 - Plain Java, no third-party runtime dependencies, no home-grown
   cryptography (SHA-256 is the platform's `MessageDigest`).
 
+## Web version
+
+`docs/` is a zero-dependency browser build of the same viewers, served with
+GitHub Pages at https://vanipy.com/tengok/ : MIDI (piano roll, playback
+through a small Web Audio synth, the play-along game), image, audio, text,
+and the hex/details view, driven by the same sniffing order (magic bytes,
+declared type, extension, text heuristic). The MIDI parser, game rules and
+keyboard geometry are line-faithful JavaScript ports of the Java originals;
+`node docs/tests/run-tests.mjs` pins them against generated fixtures
+(`ci/make_web_fixtures.py`, synthetic only). Browser-specific limits (no
+General MIDI sounds, Web MIDI availability, no folder access) are stated on
+the page itself.
+
 ## Building and checking
 
 ```

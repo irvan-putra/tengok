@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tengok - peek into files, right in this tab</title>
+<meta name="description" content="tengok is a local file viewer: MIDI with a piano roll and a play-along game, images, audio, text, and an honest hex view. Nothing is uploaded.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>tengok <span class="version">web 0.1.0</span></h1>
+  <p class="tagline">Peek into files, right in this tab. Nothing is uploaded, ever.</p>
+</header>
+
+<main>
+  <section id="drop" class="card drop">
+    <p><button id="picker" class="btn primary">Choose a file</button></p>
+    <p class="muted">or drop files anywhere on this page</p>
+    <p class="muted" id="samples-label">No file handy? Try a generated sample:</p>
+    <p id="samples" class="toolbar"></p>
+    <input id="file-input" type="file" multiple hidden>
+  </section>
+
+  <nav id="files" class="toolbar"></nav>
+  <section id="view"></section>
+
+  <section id="about" class="card">
+    <div class="card-title">What tengok opens today</div>
+    <ul class="limits">
+      <li><b>MIDI</b> (.mid, .midi, .rmi): format, tracks and instruments, a piano
+      roll, playback, and a play-along game with a live rank.</li>
+      <li><b>Images</b>: zoomable viewer, using this browser's decoders.</li>
+      <li><b>Audio</b>: a simple player, using this browser's decoders.</li>
+      <li><b>Text</b>: monospace reading view, UTF-8 with a Latin-1 fallback.</li>
+      <li><b>Everything else</b>: a paged hex view plus the file's facts
+      (declared type, detected type, size, SHA-256).</li>
+    </ul>
+    <div class="card-title">Honest limits of the web version</div>
+    <ul class="limits">
+      <li>PDF, video, SVG, office documents and archives open in the hex/details
+      view for now, exactly like Android tengok 0.3.2. Rich viewers for them are
+      on the roadmap.</li>
+      <li>MIDI plays through a simple built-in synth: browsers ship no General
+      MIDI sounds, so instruments are approximate and pitch bends are not
+      rendered.</li>
+      <li>A real MIDI keyboard needs Web MIDI (Chrome and Edge have it; Firefox
+      and Safari do not). The on-screen and letter keys work everywhere.</li>
+      <li>HEIC and AVIF photos only display in browsers that ship those
+      decoders.</li>
+      <li>No folder browsing or recent-files list: web pages cannot hold that
+      access across visits. Each visit starts fresh.</li>
+      <li>The Android app remains the full tengok: it opens files from any app,
+      remembers folders, and uses the phone's own MIDI synth.</li>
+    </ul>
+    <p class="muted">Offline after this page loads. No accounts, no analytics,
+    no uploads: files never leave this tab.</p>
+  </section>
+</main>
+
+<footer>
+  <a href="https://github.com/irvan-putra/tengok">Source</a> ·
+  <a href="https://github.com/irvan-putra/tengok/releases">Android app</a> ·
+  GPL-3.0
+</footer>
+
+<script src="js/sniffer.js"></script>
+<script src="js/midi.js"></script>
+<script src="js/game-core.js"></script>
+<script src="js/synth.js"></script>
+<script src="js/viewers.js"></script>
+<script src="js/midi-view.js"></script>
+<script src="js/game.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

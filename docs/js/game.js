@@ -1,0 +1,423 @@
+/* tengok web - play-along game: notes fall toward a pannable keyboard, taps
+ * / letter keys / a Web MIDI keyboard strike them, and a live rank climbs
+ * or falls with timing, accuracy and streak (same rules as Android). */
+(function (root) {
+"use strict";
+
+const V = root.TengokViewers;
+const M = root.TengokMidi;
+const G = root.TengokGame;
+
+const FALL_AHEAD_SEC = 2.5;
+const LEAD_IN_SEC = 1.5;
+const KEY_H = 132;
+const STATE_COLORS = { 1: "#FFB300", 2: "#3DA35D", 3: "#9AA0B0" }; // perfect/good/miss
+const WHITE_KEYS = ["a", "s", "d", "f", "g", "h", "j", "k"];
+const BLACK_KEYS = ["w", "e", "t", "y", "u"];
+
+function fmtCounts(sc) {
+  return sc.perfect + " perfect · " + sc.good + " good · " + sc.miss + " miss"
+      + " · streak " + sc.streak + " · score " + sc.score();
+}
+
+function startGame(viewArea, midi, ctx) {
+  const el = V.el;
+  viewArea.replaceChildren();
+
+  const pickCard = el("div", "card");
+  pickCard.appendChild(el("div", "card-title", "Play along: pick your track"));
+  pickCard.appendChild(el("div", "muted",
+      "You play this track; the other tracks keep playing with you."));
+  const playable = midi.tracks.filter((t) => t.noteCount > 0);
+  for (const t of playable) {
+    const b = el("button", "btn track-pick",
+        "Track " + (t.index + 1) + (t.name ? " · " + t.name : "")
+        + " · " + t.noteCount + " notes · "
+        + M.gmPitch(t.minPitch) + " to " + M.gmPitch(t.maxPitch));
+    b.addEventListener("click", () => runGame(viewArea, midi, t.index, ctx));
+    pickCard.appendChild(b);
+  }
+  const back = el("button", "btn", "Back");
+  back.addEventListener("click", () => ctx.showCurrentFile());
+  pickCard.appendChild(back);
+  viewArea.appendChild(pickCard);
+}
+
+function runGame(viewArea, midi, trackIndex, ctx) {
+  const el = V.el;
+  viewArea.replaceChildren();
+
+  const scoring = new G.GameScoring(midi, trackIndex);
+  const judged = midi.tracks[trackIndex];
+  const accomp = midi.notes.filter((n) => n.track !== trackIndex);
+  const judgedNotes = midi.notes.filter((n) => n.track === trackIndex);
+  const programs = root.TengokSynth.Synth.programMap(midi);
+  const judgedProgram = (() => {
+    for (const ch of [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]) {
+      const p = programs[trackIndex + ":" + ch];
+      if (p !== undefined) return p;
+    }
+    return 0;
+  })();
+
+  /* HUD */
+  const hud = el("div", "card hud");
+  const rankEl = el("span", "rank", G.UNRANKED);
+  const countsEl = el("span", "muted hud-counts", fmtCounts(scoring));
+  hud.appendChild(rankEl);
+  hud.appendChild(countsEl);
+  viewArea.appendChild(hud);
+
+  const bar = el("div", "toolbar");
+  const playBtn = el("button", "btn primary", "▶ Start");
+  const againBtn = el("button", "btn", "↺ Restart");
+  const backBtn = el("button", "btn", "Back");
+  bar.appendChild(playBtn);
+  bar.appendChild(againBtn);
+  bar.appendChild(backBtn);
+  viewArea.appendChild(bar);
+
+  const midiLine = el("div", "muted midi-status", "");
+  viewArea.appendChild(midiLine);
+
+  const wrap = el("div", "game-wrap");
+  const canvas = el("canvas", "game-canvas");
+  wrap.appendChild(canvas);
+  viewArea.appendChild(wrap);
+
+  const hint = el("div", "muted",
+      "Tap or click keys; drag sideways to pan the board. Letter keys play too: "
+      + "A S D F G H J K are white keys from the left edge, W E T Y U black.");
+  viewArea.appendChild(hint);
+
+  /* Geometry: song range plus breathing room, clamped to the 88-key board. */
+  let lo = Math.max(21, judged.minPitch - 3);
+  let hi = Math.min(108, judged.maxPitch + 3);
+  let kw = new G.KeyWindow(lo, hi, 320);
+  let vx = 0;
+  let lastPanAt = -1e9;
+
+  /* Song clock */
+  const firstStart = Math.max(0, scoring.firstStartMs() / 1000 - LEAD_IN_SEC);
+  let clockStart = 0; // performance.now() ms when (re)started
+  let offsetSec = firstStart;
+  let running = false;
+  let playback = null;
+  let ended = false;
+  let raf = 0;
+  const flashes = new Map(); // pitch -> performance.now() of strike
+
+  function nowSec() {
+    return running ? offsetSec + (performance.now() - clockStart) / 1000 : offsetSec;
+  }
+
+  function startPlayback() {
+    if (ended) return;
+    running = true;
+    clockStart = performance.now();
+    playBtn.textContent = "⏸ Pause";
+    playback = ctx.synth.play(accomp, offsetSec, midi.durationSeconds, programs,
+        null, null);
+  }
+
+  function stopPlayback() {
+    if (playback) { playback.stop(); playback = null; }
+    if (running) offsetSec = nowSec();
+    running = false;
+    playBtn.textContent = "▶ Resume";
+  }
+
+  playBtn.addEventListener("click", () => (running ? stopPlayback() : startPlayback()));
+  againBtn.addEventListener("click", () => {
+    stopAll();
+    runGame(viewArea, midi, trackIndex, ctx);
+  });
+  backBtn.addEventListener("click", () => {
+    stopAll();
+    ctx.showCurrentFile();
+  });
+
+  function strike(pitch) {
+    if (!running || ended) return;
+    const nowMs = nowSec() * 1000;
+    const grade = scoring.strike(pitch, nowMs);
+    ctx.synth.strike(pitch, 100, judgedProgram);
+    flashes.set(pitch, performance.now());
+    if (grade === G.PERFECT || grade === G.GOOD) updateHud();
+  }
+
+  function updateHud() {
+    const r = scoring.rankLive();
+    rankEl.textContent = r;
+    rankEl.style.color = r === G.UNRANKED ? "#8A8FA3"
+        : r.startsWith("SS") ? "#B07800" : r === "S" ? "#3E6FB0"
+        : r === "A" ? "#3DA35D" : "#5A6072";
+    countsEl.textContent = fmtCounts(scoring);
+  }
+
+  /* Pointer input: tap strikes, horizontal drag pans. */
+  const pointers = new Map();
+  canvas.addEventListener("pointerdown", (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, startX: e.offsetX, panning: false });
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    const rect = canvas.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    if (y >= canvas.clientHeight - KEY_H) {
+      const dx = e.clientX - rect.left - p.x;
+      if (p.panning) {
+        vx = kw.clampViewport(vx - dx);
+        lastPanAt = performance.now();
+      } else if (Math.abs(e.clientX - rect.left - p.startX) > 10) {
+        p.panning = true;
+      }
+      p.x = e.clientX - rect.left;
+    }
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    const p = pointers.get(e.pointerId);
+    pointers.delete(e.pointerId);
+    if (!p || p.panning) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    if (y >= canvas.clientHeight - KEY_H) {
+      const pitch = kw.pitchAt(x + vx);
+      if (pitch >= 0) strike(pitch);
+    }
+  });
+  canvas.addEventListener("pointercancel", (e) => pointers.delete(e.pointerId));
+
+  /* Letter keys from the leftmost fully visible white key. */
+  function keyDown(e) {
+    if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === " ") {
+      e.preventDefault();
+      running ? stopPlayback() : startPlayback();
+      return;
+    }
+    let firstWhite = lo;
+    while (firstWhite <= hi && kw.leftPx(firstWhite) < vx - 0.5) firstWhite++;
+    if (firstWhite > hi || G.isBlack(firstWhite)) {
+      // firstWhite may be black if it pokes in; step to next white
+      while (firstWhite <= hi && (G.isBlack(firstWhite) || kw.leftPx(firstWhite) < vx - 0.5)) firstWhite++;
+    }
+    let wi = WHITE_KEYS.indexOf(k);
+    if (wi >= 0) {
+      let count = 0;
+      for (let p = firstWhite; p <= hi; p++) {
+        if (G.isBlack(p)) continue;
+        if (count === wi) { strike(p); return; }
+        count++;
+      }
+      return;
+    }
+    let bi = BLACK_KEYS.indexOf(k);
+    if (bi >= 0) {
+      let count = 0;
+      for (let p = firstWhite; p <= hi; p++) {
+        if (!G.isBlack(p)) continue;
+        if (kw.centerPx(p) < vx) continue;
+        if (count === bi) { strike(p); return; }
+        count++;
+      }
+    }
+  }
+  window.addEventListener("keydown", keyDown);
+
+  /* Web MIDI where the browser has it (Chrome/Edge; not Firefox/Safari). */
+  if (navigator.requestMIDIAccess) {
+    navigator.requestMIDIAccess().then((access) => {
+      const names = [];
+      for (const input of access.inputs.values()) {
+        names.push(input.name || "MIDI keyboard");
+        input.onmidimessage = (msg) => {
+          const [st, pitch, vel] = msg.data;
+          if ((st & 0xF0) === 0x90 && vel > 0) strike(pitch);
+        };
+      }
+      midiLine.textContent = names.length
+          ? "MIDI keyboard: " + names.join(", ")
+          : "Web MIDI is available but no keyboard is plugged in.";
+    }).catch(() => {
+      midiLine.textContent = "MIDI keyboard access was not granted.";
+    });
+  } else {
+    midiLine.textContent = "This browser has no Web MIDI (Firefox and Safari do not); "
+        + "the on-screen keys and letter keys still work.";
+  }
+
+  /* Rendering */
+  function resize() {
+    const w = wrap.clientWidth;
+    const h = Math.min(520, Math.max(360, Math.round(root.innerHeight * 0.55)));
+    const dpr = Math.min(2, root.devicePixelRatio || 1);
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    kw = new G.KeyWindow(lo, hi, w);
+    vx = kw.clampViewport(vx);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function draw() {
+    const dpr = Math.min(2, root.devicePixelRatio || 1);
+    const g = canvas.getContext("2d");
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const now = nowSec();
+    const fallH = h - KEY_H;
+    const strikeY = fallH;
+
+    g.fillStyle = "#FBFBFE";
+    g.fillRect(0, 0, w, h);
+
+    /* falling notes of every track; judged track notes are the targets */
+    const speed = fallH / FALL_AHEAD_SEC;
+    for (const n of midi.notes) {
+      const yTop = strikeY - (n.startSec - now) * speed;
+      const yBot = strikeY - (n.endSec - now) * speed;
+      if (yBot < -4 || yTop > strikeY) continue;
+      const x1 = kw.leftPx(n.pitch) - vx;
+      const x2 = kw.rightPx(n.pitch) - vx;
+      if (x2 < 0 || x1 > w) continue;
+      let color = root.TengokMidiView.trackColor(n.track);
+      if (n.track === trackIndex) {
+        // judged notes tint by their judged state
+        for (let i = 0; i < scoring.total(); i++) {
+          if (scoring.judgedNote(i) === n) {
+            const st = scoring.stateOf(i);
+            if (st !== G.PENDING) color = STATE_COLORS[st];
+            break;
+          }
+        }
+      } else {
+        g.globalAlpha = 0.35;
+      }
+      g.fillStyle = color;
+      const top = Math.min(yTop, strikeY - 2);
+      const bottom = Math.min(yBot, strikeY - 2);
+      g.fillRect(x1 + 1, bottom, Math.max(2, x2 - x1 - 2), Math.max(3, top - bottom));
+      g.globalAlpha = 1;
+    }
+
+    /* strike line */
+    g.fillStyle = "#1F2A5C";
+    g.fillRect(0, strikeY - 1, w, 2);
+
+    /* keyboard */
+    const kbY = strikeY;
+    g.fillStyle = "#FFFFFF";
+    g.fillRect(0, kbY, w, KEY_H);
+    for (let p = lo; p <= hi; p++) {
+      if (G.isBlack(p)) continue;
+      const x = kw.leftPx(p) - vx;
+      if (x > w || x + kw.whiteW < 0) continue;
+      const flash = flashes.get(p);
+      if (flash && performance.now() - flash < 150) {
+        g.fillStyle = "#FFE9B8";
+        g.fillRect(x, kbY, kw.whiteW, KEY_H);
+      }
+      g.strokeStyle = "#B9BECB";
+      g.lineWidth = 1;
+      g.strokeRect(x + 0.5, kbY + 0.5, kw.whiteW - 1, KEY_H - 1);
+    }
+    for (let p = lo; p <= hi; p++) {
+      if (!G.isBlack(p)) continue;
+      const x = kw.leftPx(p) - vx;
+      const bw = kw.blackW();
+      if (x > w || x + bw < 0) continue;
+      const flash = flashes.get(p);
+      g.fillStyle = flash && performance.now() - flash < 150 ? "#8A6D00" : "#22242E";
+      g.fillRect(x, kbY, bw, KEY_H * 0.62);
+    }
+
+    /* pan hint arrows when the board extends past an edge */
+    g.fillStyle = "#8A90A2";
+    g.font = "12px sans-serif";
+    if (vx > 0.5) g.fillText("◀ more keys", 6, kbY + KEY_H - 10);
+    if (vx < kw.maxViewport() - 0.5) {
+      const label = "more keys ▶";
+      g.fillText(label, w - g.measureText(label).width - 6, kbY + KEY_H - 10);
+    }
+  }
+
+  function autoFollow() {
+    if (performance.now() - lastPanAt < 2500 || !running) return;
+    let loP = -1, hiP = -1;
+    const now = nowSec();
+    for (let i = 0; i < scoring.total(); i++) {
+      if (scoring.stateOf(i) !== G.PENDING) continue;
+      const s = scoring.noteStartMs(i) / 1000;
+      if (s > now + FALL_AHEAD_SEC) break;
+      if (s + 0.3 < now) continue;
+      const p = scoring.notePitch(i);
+      if (loP < 0 || p < loP) loP = p;
+      if (hiP < 0 || p > hiP) hiP = p;
+    }
+    if (loP < 0) {
+      const ni = scoring.nextPendingIndex();
+      if (ni < 0) return;
+      loP = hiP = scoring.notePitch(ni);
+    }
+    const target = kw.viewportCentering(Math.max(lo, loP - 2), Math.min(hi, hiP + 2));
+    vx += (target - vx) * 0.12;
+  }
+
+  function frame() {
+    if (ended) return;
+    const now = nowSec();
+    scoring.tick(now * 1000);
+    updateHud();
+    autoFollow();
+    draw();
+    if (running && scoring.finished()
+        && now * 1000 > scoring.lastStartMs() + LEAD_IN_SEC * 1000) {
+      finish();
+      return;
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  function finish() {
+    ended = true;
+    stopPlayback();
+    const card = el("div", "card final");
+    card.appendChild(el("div", "card-title", "Song finished"));
+    const grade = el("div", "rank big", scoring.rankFinal());
+    card.appendChild(grade);
+    card.appendChild(el("div", "muted",
+        "accuracy " + scoring.accuracy() + "% · best streak " + scoring.bestStreak));
+    card.appendChild(el("div", "muted", fmtCounts(scoring)));
+    const again = el("button", "btn primary", "Play again");
+    again.addEventListener("click", () => { stopAll(); runGame(viewArea, midi, trackIndex, ctx); });
+    const back = el("button", "btn", "Back to the viewer");
+    back.addEventListener("click", () => { stopAll(); ctx.showCurrentFile(); });
+    card.appendChild(again);
+    card.appendChild(back);
+    viewArea.appendChild(card);
+    card.scrollIntoView({ block: "nearest" });
+  }
+
+  function stopAll() {
+    cancelAnimationFrame(raf);
+    if (playback) playback.stop();
+    ctx.synth.stop();
+    window.removeEventListener("keydown", keyDown);
+    window.removeEventListener("resize", resize);
+  }
+  ctx.onCleanup(stopAll);
+
+  updateHud();
+  frame();
+}
+
+root.TengokGameUi = { startGame: startGame };
+})(typeof window !== "undefined" ? window : globalThis);

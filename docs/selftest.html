@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tengok web self-test</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <section class="card">
+    <div class="card-title">tengok web self-test</div>
+    <div class="muted">Runs the parser, scoring, geometry and sniffer checks in
+    this browser against the generated fixtures, then renders one of each
+    viewer below.</div>
+    <pre id="results" class="text-view">running...</pre>
+    <div id="verdict" class="card-title"></div>
+  </section>
+  <section id="view"></section>
+</main>
+
+<script src="js/sniffer.js"></script>
+<script src="js/midi.js"></script>
+<script src="js/game-core.js"></script>
+<script src="js/synth.js"></script>
+<script src="js/viewers.js"></script>
+<script src="js/midi-view.js"></script>
+<script src="js/game.js"></script>
+<script>
+(function () {
+"use strict";
+const out = document.getElementById("results");
+const lines = [];
+let failed = 0;
+function log(s) { lines.push(s); out.textContent = lines.join("\n"); }
+function check(name, cond) {
+  if (cond) log("PASS " + name);
+  else { failed++; log("FAIL " + name); }
+}
+function near(a, b) { return Math.abs(a - b) < 1e-9; }
+
+async function bytes(name) {
+  const r = await fetch("fixtures/" + name);
+  if (!r.ok) throw new Error("fetch " + name + ": HTTP " + r.status);
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+async function main() {
+  const M = window.TengokMidi;
+  const G = window.TengokGame;
+  const S = window.TengokSniffer;
+
+  const two = M.MidiFile.parse(await bytes("twotrack.mid"));
+  check("twotrack format 1, 2 tracks", two.format === 1 && two.tracks.length === 2);
+  check("twotrack 2 notes", two.notes.length === 2);
+  check("twotrack tempo map", near(two.tickToSeconds(960), 1.0) && near(two.tickToSeconds(1920), 3.0));
+
+  const etude = M.MidiFile.parse(await bytes("etude.mid"));
+  check("etude 4 tracks, 126 notes", etude.tracks.length === 4 && etude.notes.length === 126);
+  check("etude C major 4/4, 17.94s",
+      etude.keySig === "C major" && etude.timeSigNum === 4 && near(etude.durationSeconds, 17.94));
+  check("etude melody C4..C5", etude.tracks[1].minPitch === 60 && etude.tracks[1].maxPitch === 72);
+
+  let threw = false;
+  try { M.MidiFile.parse(new Uint8Array([1, 2, 3])); } catch (e) { threw = true; }
+  check("corrupt bytes raise a readable error", threw);
+
+  const sc = new G.GameScoring(two, 1);
+  check("game starts unranked", sc.rankLive() === G.UNRANKED);
+  check("perfect within 100ms", sc.strike(72, 50) === G.PERFECT);
+  sc.tick(1050);
+  check("good within 220ms", sc.strike(76, 1150) === G.GOOD);
+  check("rank ladder", G.rank(100, 0) === "SSS" && G.rank(40, 0) === "C"
+      && G.rank(80, 10) === "SSS");
+
+  const kw = new G.KeyWindow(21, 108, 360);
+  check("white keys >= 44px and pannable", kw.whiteW === 44 && kw.maxViewport() > 0);
+  check("pitch hit-test", kw.pitchAt(kw.centerPx(60)) === 60 && kw.pitchAt(-5) === -1);
+
+  const head = (await bytes("twotrack.mid")).slice(0, 64);
+  check("sniffer: .txt that is MIDI opens as music", S.sniff("a.txt", "text/plain", head) === S.MIDI);
+  check("sniffer: png magic", S.sniff("x", "", (await bytes("pixel.png")).slice(0, 32)) === S.IMAGE);
+  check("sniffer: text heuristic", S.sniff("noext", "", (await bytes("sample.txt")).slice(0, 128)) === S.TEXT);
+
+  check("web audio available", !!(window.AudioContext || window.webkitAudioContext));
+  check("web midi status known", true);
+
+  document.getElementById("verdict").textContent =
+      failed === 0 ? "ALL CHECKS PASSED" : failed + " CHECKS FAILED";
+  document.getElementById("verdict").style.color = failed === 0 ? "#3DA35D" : "#EF5350";
+
+  /* Render one of each viewer for pixel verification. */
+  const V = window.TengokViewers;
+  const view = document.getElementById("view");
+  const ctx = {
+    synth: new window.TengokSynth.Synth(),
+    viewArea: view,
+    onCleanup: function () {},
+    onHex: function () {},
+    showCurrentFile: function () {},
+  };
+  const etudeFile = new File([await bytes("etude.mid")], "etude.mid", { type: "audio/midi" });
+  window.TengokMidiView.showMidi(view, etudeFile, M.MidiFile.parse(await bytes("etude.mid")), ctx);
+  V.showImage(view, new File([await bytes("pixel.png")], "pixel.png", { type: "image/png" }), ctx);
+  V.showAudio(view, new File([await bytes("tone.wav")], "tone.wav", { type: "audio/wav" }), ctx);
+  V.showText(view, new File([await bytes("sample.txt")], "sample.txt", { type: "text/plain" }), ctx);
+  V.showHex(view, new File([await bytes("twotrack.mid")], "twotrack.mid", { type: "audio/midi" }), ctx, "data");
+  log("viewers rendered: midi, image, audio, text, hex");
+}
+
+main().catch((e) => {
+  log("FATAL " + (e && e.message));
+  document.getElementById("verdict").textContent = "SELF-TEST CRASHED";
+  document.getElementById("verdict").style.color = "#EF5350";
+});
+</script>
+</body>
+</html>
