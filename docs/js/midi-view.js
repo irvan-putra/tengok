@@ -207,6 +207,13 @@ function showMidi(container, file, midi, ctx) {
   gameCard.appendChild(goBtn);
   container.appendChild(gameCard);
 
+  // A hidden tab throttles the scheduler timers, which would starve the
+  // lookahead and strand playback mid-song: pause instead, resumable from
+  // the slider position.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && playing) stopPlayback(false);
+  });
+
   ctx.onCleanup(() => stopPlayback(false));
 }
 

@@ -42,17 +42,22 @@ class Synth {
     if (!this.ctx) {
       const AC = root.AudioContext || root.webkitAudioContext;
       if (!AC) return false;
-      this.ctx = new AC();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = 0.5;
-      this.master.connect(this.ctx.destination);
-      const len = Math.floor(this.ctx.sampleRate * 0.25);
-      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-      const data = this.noiseBuf.getChannelData(0);
-      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      this.attach(new AC());
     }
     if (this.ctx.state === "suspended") this.ctx.resume();
     return true;
+  }
+
+  /* Wire the synth to any BaseAudioContext (live or OfflineAudioContext). */
+  attach(audioCtx) {
+    this.ctx = audioCtx;
+    this.master = this.ctx.createGain();
+    this.master.gain.value = 0.5;
+    this.master.connect(this.ctx.destination);
+    const len = Math.floor(this.ctx.sampleRate * 0.25);
+    this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = this.noiseBuf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
   }
 
   /* One struck note right now (game input). program picks the voice. */
@@ -85,6 +90,7 @@ class Synth {
     const osc = this.ctx.createOscillator();
     osc.type = v.type;
     osc.frequency.value = freq(pitch);
+    osc.start(when); // must precede stop(): Chrome throws otherwise
     const g = this.ctx.createGain();
     const peak = 0.32 * Math.pow(velocity / 127, 1.4);
     const end = when + Math.max(0.05, durSec);
@@ -102,7 +108,6 @@ class Synth {
       osc.stop(end + 0.05);
     }
     osc.connect(g); g.connect(this.master);
-    osc.start(when);
     this.track(osc);
   }
 
@@ -145,24 +150,36 @@ class Synth {
 
     function scheduleWindow() {
       const songNow = ctx.currentTime - startedAt + fromSec;
-      const horizon = songNow + LOOKAHEAD;
-      while (cursor < sorted.length && sorted[cursor].startSec <= horizon) {
-        const n = sorted[cursor++];
-        const when = startedAt + Math.max(0, n.startSec - fromSec);
-        const dur = Math.max(0.05, n.endSec - Math.max(n.startSec, fromSec));
-        const prog = programs ? programs[n.track + ":" + n.channel] : undefined;
-        self.note(n.pitch, n.velocity, when, dur, prog, n.channel === 9);
-      }
       if (songNow >= durationSec) {
         self.stopTimers();
         if (onEnded) onEnded();
         return;
       }
+      const horizon = songNow + LOOKAHEAD;
+      try {
+        while (cursor < sorted.length && sorted[cursor].startSec <= horizon) {
+          const n = sorted[cursor++];
+          const when = startedAt + Math.max(0, n.startSec - fromSec);
+          const dur = Math.max(0.05, n.endSec - Math.max(n.startSec, fromSec));
+          const prog = programs ? programs[n.track + ":" + n.channel] : undefined;
+          self.note(n.pitch, n.velocity, when, dur, prog, n.channel === 9);
+        }
+      } catch (e) {
+        // A bad note must not kill the scheduler: the song would go silent
+        // while the clock runs on. Skip it and keep the chain alive.
+        if (root.console) console.warn("tengok: a note could not be scheduled", e);
+      }
       self.timer = setTimeout(scheduleWindow, 200);
     }
 
     tickTimer = setInterval(() => {
-      if (onTick) onTick(ctx.currentTime - startedAt + fromSec);
+      const songNow = ctx.currentTime - startedAt + fromSec;
+      if (onTick) onTick(songNow);
+      if (songNow >= durationSec + 0.5) {
+        // Backstop: if the scheduler chain ever stalls, the song still ends.
+        self.stopTimers();
+        if (onEnded) onEnded();
+      }
     }, 33);
     this.tickTimer = tickTimer;
     scheduleWindow();

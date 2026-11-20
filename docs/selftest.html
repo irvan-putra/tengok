@@ -86,6 +86,29 @@ async function main() {
   check("web audio available", !!(window.AudioContext || window.webkitAudioContext));
   check("web midi status known", true);
 
+  /* The synth must actually render audible samples: schedule one sustained
+   * note, one plucked-family note and one percussion hit into an
+   * OfflineAudioContext, render, and require real signal. This is the
+   * regression test for scheduling a note throwing before start() (which
+   * silently killed all playback and let the clock run past the song end). */
+  try {
+    const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const octx = new OC(1, 44100, 44100);
+    const synth = new window.TengokSynth.Synth();
+    synth.attach(octx);
+    synth.note(60, 100, 0.1, 0.5, 0, false);   // piano family
+    synth.note(64, 100, 0.1, 0.5, 32, false);  // sustained family
+    synth.note(38, 110, 0.1, 0.2, 0, true);    // percussion
+    const rendered = await octx.startRendering();
+    const data = rendered.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+    check("synth renders audible signal offline", peak > 0.01);
+  } catch (e) {
+    check("synth renders audible signal offline (" + e.message + ")", false);
+  }
+
+
   document.getElementById("verdict").textContent =
       failed === 0 ? "ALL CHECKS PASSED" : failed + " CHECKS FAILED";
   document.getElementById("verdict").style.color = failed === 0 ? "#3DA35D" : "#EF5350";
