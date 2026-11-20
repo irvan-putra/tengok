@@ -11,6 +11,8 @@ import android.view.View;
 import android.view.ViewConfiguration;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 
@@ -77,15 +79,21 @@ public final class GameView extends View {
     private float viewportX;
     private boolean viewportInit;
     private long manualHoldUntil;
-    private float downX;
-    private float downY;
-    private float lastX;
-    private float maxDx;
-    private boolean panning;
-    /** Key under the finger right now: the visible "your tap registered". */
-    private int pressedPitch = -1;
-    private final Runnable strikeGrace = this::strikeGraceNow;
-    private boolean struckThisGesture;
+    /** One tracked finger. Every gesture rule (grace strike, wobble
+     *  forgiveness, drags pan but never strike) applies per finger, exactly
+     *  as it did to the single finger before chords were supported. */
+    private final class Finger {
+        float downX, downY, lastX, maxDx;
+        boolean panning;
+        int candidatePitch = -1;
+        int pressedPitch = -1;
+        boolean struck;
+        long downEventMs;
+        final Runnable grace = () -> strikeGraceNow(this);
+    }
+    private final HashMap<Integer, Finger> fingers = new HashMap<>();
+    /** Keys under fingers right now: the visible "your tap registered". */
+    private final HashSet<Integer> pressedPitches = new HashSet<>();
     /** Judged hit whose key is still held: sparks keep coming until release. */
     private int heldSparkPitch = -1;
     private int heldSparkColor;
@@ -109,8 +117,6 @@ public final class GameView extends View {
     /** x, y, vx (px/ms), vy (px/ms), born uptimeMs, color. */
     private final ArrayList<float[]> sparks = new ArrayList<>();
     private final Random sparkRng = new Random();
-    private int candidatePitch = -1;
-    private long downEventMs;
     private final int touchSlop;
 
     private int keysLoggedW = -1;
@@ -403,7 +409,7 @@ public final class GameView extends View {
             RectF kr = keyRect(p);
             if (kr.right < 0 || kr.left > w) continue;
             boolean black = KeyWindow.isBlack(p);
-            if (p == pressedPitch) {
+            if (pressedPitches.contains(p)) {
                 paint.setColor(black ? 0x66FFFFFF : 0x33000000);
                 canvas.drawRect(kr, paint);
             }
@@ -437,7 +443,7 @@ public final class GameView extends View {
         }
         // a held judged key keeps a gentle sparkle going until release
         if (heldSparkPitch >= 0) {
-            if (pressedPitch != heldSparkPitch) {
+            if (!pressedPitches.contains(heldSparkPitch)) {
                 heldSparkPitch = -1;
             } else {
                 if (nowUp - lastHeldSparkMs >= HELD_SPARK_MS) {
@@ -481,24 +487,28 @@ public final class GameView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         switch (e.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN: {
-                float x = e.getX();
-                float y = e.getY();
-                downX = lastX = x;
-                downY = y;
-                maxDx = 0;
-                panning = false;
-                downEventMs = e.getEventTime();
-                candidatePitch = -1;
-                struckThisGesture = false;
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_POINTER_DOWN: {
+                int idx = e.getActionIndex();
+                float x = e.getX(idx);
+                float y = e.getY(idx);
+                Finger f = new Finger();
+                f.downX = f.lastX = x;
+                f.downY = y;
+                f.downEventMs = e.getEventTime();
+                fingers.put(e.getPointerId(idx), f);
                 if (y < getHeight() - keyboardH()) {
                     // the lane itself: only meaningful while a skip is on offer
-                    if (gapHintSec > 0 && skipListener != null) skipListener.onSkip();
+                    if (e.getActionMasked() == MotionEvent.ACTION_DOWN
+                            && gapHintSec > 0 && skipListener != null) {
+                        skipListener.onSkip();
+                    }
                 } else {
-                    candidatePitch = pitchAt(x, y);
-                    if (candidatePitch >= 0) {
-                        pressedPitch = candidatePitch; // immediate "registered"
-                        postDelayed(strikeGrace, STRIKE_GRACE_MS);
+                    f.candidatePitch = pitchAt(x, y);
+                    if (f.candidatePitch >= 0) {
+                        f.pressedPitch = f.candidatePitch; // immediate "registered"
+                        pressedPitches.add(f.pressedPitch);
+                        postDelayed(f.grace, STRIKE_GRACE_MS);
                         invalidate();
                     }
                     // A real finger rolls a little vertically during a tap. Do
@@ -510,50 +520,58 @@ public final class GameView extends View {
                 return true;
             }
             case MotionEvent.ACTION_MOVE: {
-                if (Math.abs(e.getY() - downY) > touchSlop * 3) {
-                    candidatePitch = -1; // a deliberate vertical drag is not a tap
-                    if (pressedPitch >= 0) { pressedPitch = -1; invalidate(); }
-                }
-                KeyWindow kw = keyWindow();
-                if (kw.maxViewport() <= 0) return true;
-                float x = e.getX();
-                maxDx = Math.max(maxDx, Math.abs(x - downX));
-                if (!panning && maxDx > touchSlop) {
-                    panning = true; // a drag pans; the candidate survives small wobble
-                    removeCallbacks(strikeGrace); // but a real drag never strikes
-                }
-                if (panning) {
-                    viewportX = kw.clampViewport(viewportX - (x - lastX));
-                    tweenFrom = tweenDest = viewportX;
-                    tweenStartMs = 0;
-                    lastX = x;
-                    manualHoldUntil = SystemClock.uptimeMillis() + MANUAL_HOLD_MS;
-                    invalidate();
+                for (int i = 0; i < e.getPointerCount(); i++) {
+                    Finger f = fingers.get(e.getPointerId(i));
+                    if (f == null) continue;
+                    float x = e.getX(i);
+                    float y = e.getY(i);
+                    if (Math.abs(y - f.downY) > touchSlop * 3) {
+                        f.candidatePitch = -1; // a deliberate vertical drag is not a tap
+                        if (f.pressedPitch >= 0) { releasePressed(f); invalidate(); }
+                    }
+                    KeyWindow kw = keyWindow();
+                    if (kw.maxViewport() <= 0) continue;
+                    f.maxDx = Math.max(f.maxDx, Math.abs(x - f.downX));
+                    if (!f.panning && f.maxDx > touchSlop) {
+                        f.panning = true; // a drag pans; the candidate survives small wobble
+                        removeCallbacks(f.grace); // but a real drag never strikes
+                    }
+                    if (f.panning) {
+                        viewportX = kw.clampViewport(viewportX - (x - f.lastX));
+                        tweenFrom = tweenDest = viewportX;
+                        tweenStartMs = 0;
+                        f.lastX = x;
+                        manualHoldUntil = SystemClock.uptimeMillis() + MANUAL_HOLD_MS;
+                        invalidate();
+                    }
                 }
                 return true;
             }
-            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP: {
+                // one finger of several lifts: judge only that finger's tap
+                Finger f = fingers.remove(e.getPointerId(e.getActionIndex()));
+                if (f != null) finishFinger(f, e.getEventTime());
+                return true;
+            }
+            case MotionEvent.ACTION_UP: {
                 // A real tap wobbles. Forgive a quick gesture whose finger
                 // never strayed far: still the strike the user meant. A true
                 // look-around drag (sustained displacement) never strikes.
-                removeCallbacks(strikeGrace);
-                if (!struckThisGesture && candidatePitch >= 0
-                        && (!panning || (maxDx < touchSlop * 2.5f
-                                && e.getEventTime() - downEventMs < 300))) {
-                    strike(candidatePitch, e.getEventTime() - downEventMs);
+                Finger f = fingers.remove(e.getPointerId(e.getActionIndex()));
+                if (f != null) finishFinger(f, e.getEventTime());
+                // the stream is over; nothing may linger
+                for (Finger rest : fingers.values()) {
+                    removeCallbacks(rest.grace);
+                    releasePressed(rest);
                 }
-                candidatePitch = -1;
-                pressedPitch = -1;
-                heldSparkPitch = -1;
-                panning = false;
-                invalidate();
+                fingers.clear();
                 return true;
+            }
             case MotionEvent.ACTION_CANCEL:
-                removeCallbacks(strikeGrace);
-                candidatePitch = -1;
-                pressedPitch = -1;
+                for (Finger rest : fingers.values()) removeCallbacks(rest.grace);
+                fingers.clear();
+                pressedPitches.clear();
                 heldSparkPitch = -1;
-                panning = false;
                 invalidate();
                 return true;
             default:
@@ -561,7 +579,28 @@ public final class GameView extends View {
         }
     }
 
-    /** The controller judged a strike: flash the key in the grade's color.
+    /** Stop showing a finger's key as held, unless another finger holds it. */
+    private void releasePressed(Finger f) {
+        if (f.pressedPitch < 0) return;
+        int p = f.pressedPitch;
+        f.pressedPitch = -1;
+        for (Finger g : fingers.values()) if (g.pressedPitch == p) return;
+        pressedPitches.remove(p);
+    }
+
+    /** A finger lifted: the same forgiving tap judgment as ever, per finger. */
+    private void finishFinger(Finger f, long eventMs) {
+        removeCallbacks(f.grace);
+        if (!f.struck && f.candidatePitch >= 0
+                && (!f.panning || (f.maxDx < touchSlop * 2.5f
+                        && eventMs - f.downEventMs < 300))) {
+            strike(f.candidatePitch, eventMs - f.downEventMs);
+        }
+        releasePressed(f);
+        invalidate();
+    }
+
+    /** The controller judged    /** The controller judged a strike: flash the key in the grade's color.
      *  grade PENDING means the tap registered but matched no pending note. */
     public void showStrikeGrade(int pitch, int grade) {
         flashPitch = pitch;
@@ -570,7 +609,7 @@ public final class GameView extends View {
         if (grade == GameScoring.PERFECT || grade == GameScoring.GOOD) {
             int color = grade == GameScoring.PERFECT ? 0xFFFFD84D : 0xFF9BE15D;
             spawnSparks(pitch, color, SPARKS_PER_HIT);
-            if (pressedPitch == pitch) {
+            if (pressedPitches.contains(pitch)) {
                 // still held: keep sparkling until the finger lifts
                 heldSparkPitch = pitch;
                 heldSparkColor = color;
@@ -600,10 +639,10 @@ public final class GameView extends View {
 
     /** Grace elapsed with the finger still down and no pan: strike now, so a
      *  held key judges and sparks during the hold, not only at release. */
-    private void strikeGraceNow() {
-        if (struckThisGesture || panning || candidatePitch < 0) return;
-        struckThisGesture = true;
-        strike(candidatePitch, SystemClock.uptimeMillis() - downEventMs);
+    private void strikeGraceNow(Finger f) {
+        if (f.struck || f.panning || f.candidatePitch < 0) return;
+        f.struck = true;
+        strike(f.candidatePitch, SystemClock.uptimeMillis() - f.downEventMs);
     }
 
     private void strike(int pitch, long delayMs) {
