@@ -57,5 +57,13 @@ android {
 }
 
 dependencies {
+    // Media3 Transformer drives the phone's own hardware codecs for the
+    // audio/video conversions (Apache-2.0). Version pinned; latest stable
+    // verified against Google's Maven repo.
+    val media3 = "1.11.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-transformer:$media3")
+    implementation("androidx.media3:media3-effect:$media3")
+    implementation("androidx.media3:media3-common:$media3")
     testImplementation("junit:junit:4.13.2")
 }

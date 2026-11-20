@@ -60,7 +60,18 @@ public class SnifferTest {
         assertEquals(Sniffer.Kind.IMAGE, Sniffer.sniff("a.bin", null, heic));
         byte[] mp4 = new byte[16];
         System.arraycopy(new byte[]{0, 0, 0, 24, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'}, 0, mp4, 0, 12);
-        // not claimed as an image; falls to hex since mp4 has no v0.1 viewer
-        assertEquals(Sniffer.Kind.HEX, Sniffer.sniff("a.bin", null, mp4));
+        // not an image; video is its own kind now (hex view + conversion)
+        assertEquals(Sniffer.Kind.VIDEO, Sniffer.sniff("a.bin", null, mp4));
+    }
+
+    @Test
+    public void videoMagicAndM4aStaysAudio() {
+        byte[] ebml = new byte[] {0x1A, 0x45, (byte) 0xDF, (byte) 0xA3, 0, 0, 0, 0};
+        assertEquals(Sniffer.Kind.VIDEO, Sniffer.sniff("a.bin", null, ebml));
+        byte[] m4a = new byte[16];
+        System.arraycopy(new byte[]{0, 0, 0, 24, 'f', 't', 'y', 'p', 'M', '4', 'A', ' '}, 0, m4a, 0, 12);
+        assertEquals(Sniffer.Kind.AUDIO, Sniffer.sniff("a.bin", null, m4a));
+        assertEquals(Sniffer.Kind.VIDEO, Sniffer.sniff("clip.mkv", null, new byte[4]));
+        assertEquals(Sniffer.Kind.VIDEO, Sniffer.sniff("x", "video/mp4", new byte[4]));
     }
 }

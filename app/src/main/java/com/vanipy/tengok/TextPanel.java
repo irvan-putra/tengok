@@ -27,11 +27,16 @@ public class TextPanel {
     }
 
     public static Result decode(Source source) throws IOException {
-        byte[] raw = source.readAll(MAX_CHARS_BYTES + 1);
+        return decode(source, MAX_CHARS_BYTES);
+    }
+
+    /** Same decode with a caller-chosen cap; conversion passes the 32 MB file cap. */
+    public static Result decode(Source source, long capBytes) throws IOException {
+        byte[] raw = source.readAll(capBytes + 1);
         Result r = new Result();
-        r.truncated = raw.length > MAX_CHARS_BYTES;
-        r.bytesShown = Math.min(raw.length, MAX_CHARS_BYTES);
-        byte[] shown = r.truncated ? java.util.Arrays.copyOf(raw, (int) MAX_CHARS_BYTES) : raw;
+        r.truncated = raw.length > capBytes;
+        r.bytesShown = Math.min(raw.length, capBytes);
+        byte[] shown = r.truncated ? java.util.Arrays.copyOf(raw, (int) capBytes) : raw;
         try {
             CharsetDecoder dec = StandardCharsets.UTF_8.newDecoder()
                     .onMalformedInput(CodingErrorAction.REPORT)
