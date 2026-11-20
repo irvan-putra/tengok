@@ -476,8 +476,12 @@ if not n:
     sys.exit(1)
 m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n["bounds"])
 x1, y1, x2, y2 = map(int, m.groups())
-adb("shell", "input", "swipe", str(x1 + 10), str((y1 + y2) // 2),
-    str((x1 + x2) // 2), str((y1 + y2) // 2), "400")
+# start well inside the bar: a drag from the screen's left edge is stolen
+# by gesture navigation as back (observed: game exits to the fixture list)
+sx = x1 + int((x2 - x1) * 0.3)
+ex = x1 + int((x2 - x1) * 0.5)
+adb("shell", "input", "swipe", str(sx), str((y1 + y2) // 2),
+    str(ex), str((y1 + y2) // 2), "400")
 time.sleep(1)
 out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
 scrub = re.findall(r"TENGOK-GAME-SCRUB mediaMs=(\d+)", out)
