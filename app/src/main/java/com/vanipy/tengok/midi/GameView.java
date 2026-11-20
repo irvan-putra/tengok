@@ -65,6 +65,7 @@ public final class GameView extends View {
     private float downX;
     private float downY;
     private float lastX;
+    private float maxDx;
     private boolean panning;
     private int candidatePitch = -1;
     private long downEventMs;
@@ -351,6 +352,7 @@ public final class GameView extends View {
                 float y = e.getY();
                 downX = lastX = x;
                 downY = y;
+                maxDx = 0;
                 panning = false;
                 downEventMs = e.getEventTime();
                 candidatePitch = -1;
@@ -368,15 +370,15 @@ public final class GameView extends View {
                 return true;
             }
             case MotionEvent.ACTION_MOVE: {
-                if (!panning && Math.abs(e.getY() - downY) > touchSlop * 3) {
+                if (Math.abs(e.getY() - downY) > touchSlop * 3) {
                     candidatePitch = -1; // a deliberate vertical drag is not a tap
                 }
                 KeyWindow kw = keyWindow();
                 if (kw.maxViewport() <= 0) return true;
                 float x = e.getX();
-                if (!panning && Math.abs(x - downX) > touchSlop) {
-                    panning = true;
-                    candidatePitch = -1; // a drag is a look-around, never a strike
+                maxDx = Math.max(maxDx, Math.abs(x - downX));
+                if (!panning && maxDx > touchSlop) {
+                    panning = true; // a drag pans; the candidate survives small wobble
                 }
                 if (panning) {
                     viewportX = kw.clampViewport(viewportX - (x - lastX));
@@ -387,7 +389,12 @@ public final class GameView extends View {
                 return true;
             }
             case MotionEvent.ACTION_UP:
-                if (!panning && candidatePitch >= 0) {
+                // A real tap wobbles. Forgive a quick gesture whose finger
+                // never strayed far: still the strike the user meant. A true
+                // look-around drag (sustained displacement) never strikes.
+                if (candidatePitch >= 0
+                        && (!panning || (maxDx < touchSlop * 2.5f
+                                && e.getEventTime() - downEventMs < 300))) {
                     strike(candidatePitch, e.getEventTime() - downEventMs);
                 }
                 candidatePitch = -1;
