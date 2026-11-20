@@ -26,7 +26,13 @@ function rank(accuracyPct, streak) {
 
 /* --- GameScoring: every note judged on its own clock. --- */
 const PERFECT_MS = 100;
-const GOOD_MS = 220;
+/* A tap this far before the note still counts. Early taps are rare. */
+const GOOD_EARLY_MS = 200;
+/* A tap this far after the note still counts - the common human case.
+ * The Good window is asymmetric on purpose (same tuning as the Android
+ * app): a real fingertip lands late far more often than early, and a
+ * note bar stays hittable for most of the time it is visibly leaving. */
+const GOOD_LATE_MS = 400;
 const PENDING = 0;
 const PERFECT = 1;
 const GOOD = 2;
@@ -72,16 +78,18 @@ class GameScoring {
   finished() { return this.judged === this.noteIdx.length; }
 
   /* A key struck at timeMs (song clock). Grades the nearest still-pending
-   * note of this pitch within the GOOD window, if any. */
+   * note of this pitch within the Good window, if any. */
   strike(pitch, timeMs) {
     let best = -1;
-    let bestAbs = GOOD_MS + 1;
+    let bestAbs = GOOD_LATE_MS + 1;
     for (let i = 0; i < this.noteIdx.length; i++) {
       if (this.state[i] !== PENDING) continue;
       const n = this.midi.notes[this.noteIdx[i]];
       if (n.pitch !== pitch) continue;
-      const d = Math.abs(n.startSec * 1000.0 - timeMs);
-      if (d <= GOOD_MS && d < bestAbs) {
+      const signed = timeMs - n.startSec * 1000.0; // +: late, -: early
+      if (signed < -GOOD_EARLY_MS || signed > GOOD_LATE_MS) continue;
+      const d = Math.abs(signed);
+      if (d < bestAbs) {
         bestAbs = d;
         best = i;
       }
@@ -101,7 +109,7 @@ class GameScoring {
     for (let i = 0; i < this.noteIdx.length; i++) {
       if (this.state[i] !== PENDING) continue;
       const n = this.midi.notes[this.noteIdx[i]];
-      if (n.startSec * 1000.0 + GOOD_MS < nowMs) {
+      if (n.startSec * 1000.0 + GOOD_LATE_MS < nowMs) {
         this.state[i] = MISS;
         this.miss++;
         this.streak = 0;
@@ -230,7 +238,8 @@ root.TengokGame = {
   bonusPct: bonusPct,
   rank: rank,
   PERFECT_MS: PERFECT_MS,
-  GOOD_MS: GOOD_MS,
+  GOOD_EARLY_MS: GOOD_EARLY_MS,
+  GOOD_LATE_MS: GOOD_LATE_MS,
   PENDING: PENDING,
   PERFECT: PERFECT,
   GOOD: GOOD,

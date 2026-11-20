@@ -21,12 +21,12 @@
 
 <script src="js/sniffer.js?v=45928a58"></script>
 <script src="js/midi.js?v=820c13d3"></script>
-<script src="js/game-core.js?v=35615ce1"></script>
+<script src="js/game-core.js?v=50d2642a"></script>
 <script src="js/synth.js?v=0fc106b2"></script>
 <script src="js/viewers.js?v=3e0f086b"></script>
 <script src="js/convert.js?v=fbea8dcf"></script>
 <script src="js/midi-view.js?v=0d9e899f"></script>
-<script src="js/game.js?v=c0319b2f"></script>
+<script src="js/game.js?v=19301640"></script>
 <script>
 (function () {
 "use strict";
@@ -70,7 +70,15 @@ async function main() {
   check("game starts unranked", sc.rankLive() === G.UNRANKED);
   check("perfect within 100ms", sc.strike(72, 50) === G.PERFECT);
   sc.tick(1050);
-  check("good within 220ms", sc.strike(76, 1150) === G.GOOD);
+  check("good 150ms late", sc.strike(76, 1150) === G.GOOD);
+  const scEarly = new G.GameScoring(two, 1);
+  check("good 150ms early", scEarly.strike(72, -150) === G.GOOD);
+  check("outside 200ms early matches no note", scEarly.strike(76, 700) === G.PENDING);
+  const scLate = new G.GameScoring(two, 1);
+  check("good 350ms late", scLate.strike(72, 350) === G.GOOD);
+  scLate.tick(1451);
+  check("miss once 400ms late window closes", scLate.stateOf(1) === G.MISS
+      && scLate.strike(76, 1460) === G.PENDING);
   check("rank ladder", G.rank(100, 0) === "SSS" && G.rank(40, 0) === "C"
       && G.rank(80, 10) === "SSS");
 
