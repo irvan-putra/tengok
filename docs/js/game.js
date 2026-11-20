@@ -482,7 +482,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   }
 
   function autoFollow() {
-    if (performance.now() - lastPanAt < 2500 || !running) return;
+    if (performance.now() - lastPanAt < 2500 || !running) { twStart = 0; return; }
     let loP = -1, hiP = -1;
     const now = nowSec();
     for (let i = 0; i < scoring.total(); i++) {
@@ -496,13 +496,16 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     }
     if (loP < 0) {
       const ni = scoring.nextPendingIndex();
-      if (ni < 0) return;
+      if (ni < 0) { twStart = 0; return; }
       loP = hiP = scoring.notePitch(ni);
     }
     // Stay still while the cluster sits comfortably inside the board; glide
     // early, with a time-based ease and a speed cap, instead of jumping.
     const margin = 24;
-    if (kw.leftPx(loP) - vx >= margin && kw.rightPx(hiP) - vx <= canvas.clientWidth - margin) return;
+    if (kw.leftPx(loP) - vx >= margin && kw.rightPx(hiP) - vx <= canvas.clientWidth - margin) {
+      twStart = 0; // a frozen tween must not resume with a stale clock
+      return;
+    }
     const target = kw.viewportCentering(Math.max(lo, loP - 2), Math.min(hi, hiP + 2));
     const diff = target - vx;
     if (Math.abs(diff) < 1) { vx = target; twDest = target; twStart = 0; return; }

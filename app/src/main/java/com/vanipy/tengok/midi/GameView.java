@@ -192,7 +192,10 @@ public final class GameView extends View {
             viewportX = 0;
             return;
         }
-        if (SystemClock.uptimeMillis() < manualHoldUntil) return;
+        if (SystemClock.uptimeMillis() < manualHoldUntil) {
+            tweenStartMs = 0; // a frozen tween must not resume with a stale clock
+            return;
+        }
         double first = Double.MAX_VALUE;
         for (int i = 0; i < notes.size(); i++) {
             if (scoring.stateOf(i) == GameScoring.PENDING) {
@@ -200,7 +203,7 @@ public final class GameView extends View {
                 break;
             }
         }
-        if (first == Double.MAX_VALUE) return;
+        if (first == Double.MAX_VALUE) { tweenStartMs = 0; return; }
         int lo = 127, hi = 0;
         for (int i = 0; i < notes.size(); i++) {
             if (scoring.stateOf(i) != GameScoring.PENDING) continue;
@@ -209,10 +212,15 @@ public final class GameView extends View {
             if (n.pitch < lo) lo = n.pitch;
             if (n.pitch > hi) hi = n.pitch;
         }
-        if (lo > hi) return;
+        if (lo > hi) { tweenStartMs = 0; return; }
         float margin = getResources().getDisplayMetrics().density * FOLLOW_MARGIN_DP;
         if (!snap && kw.leftPx(lo) - viewportX >= margin
-                && kw.rightPx(hi) - viewportX <= getWidth() - margin) return;
+                && kw.rightPx(hi) - viewportX <= getWidth() - margin) {
+            // cluster comfortable: stop here; a frozen tween must not resume
+            // with a stale clock later, or the board would snap to its end
+            tweenStartMs = 0;
+            return;
+        }
         float target = kw.viewportCentering(lo, hi);
         float diff = target - viewportX;
         if (snap) {
