@@ -132,9 +132,10 @@ test("gmPitch names", () => {
 });
 
 /* ---- GameScoring / GameRank: same windows and letters as Android ---- */
-test("scoring: perfect within 100ms, good within 220ms", () => {
+test("scoring: perfect within 100ms, good 200 early / 400 late", () => {
   assert.equal(G.PERFECT_MS, 100);
-  assert.equal(G.GOOD_MS, 220);
+  assert.equal(G.GOOD_EARLY_MS, 200);
+  assert.equal(G.GOOD_LATE_MS, 400);
   const sc = new G.GameScoring(two, 1);
   assert.equal(sc.total(), 2);
   assert.equal(sc.rankLive(), G.UNRANKED); // no evidence, no letter
@@ -144,6 +145,12 @@ test("scoring: perfect within 100ms, good within 220ms", () => {
   assert.equal(sc.finished(), true);
   assert.equal(sc.score(), 150);
   assert.equal(sc.accuracy(), 75);
+  // the window is asymmetric: 350ms late still scores, 250ms early does not
+  const wide = new G.GameScoring(two, 1);
+  assert.equal(wide.strike(72, 350), G.GOOD); // late slack
+  const early = new G.GameScoring(two, 1);
+  assert.equal(early.strike(72, -250), G.PENDING); // early slack is tighter
+  assert.equal(early.strike(72, -150), G.GOOD);
 });
 test("scoring: misses break the streak and the rank", () => {
   const sc = new G.GameScoring(etude, 1);
@@ -151,7 +158,7 @@ test("scoring: misses break the streak and the rank", () => {
   assert.equal(sc.strike(sc.notePitch(0), first), G.PERFECT);
   assert.equal(sc.strike(sc.notePitch(1), sc.noteStartMs(1)), G.PERFECT);
   assert.equal(sc.rankLive(), "SSS"); // 100 accuracy + streak 2*2
-  sc.tick(sc.noteStartMs(2) + G.GOOD_MS + 1); // note 2 slips past
+  sc.tick(sc.noteStartMs(2) + G.GOOD_LATE_MS + 1); // note 2 slips past
   assert.equal(sc.miss, 1);
   assert.equal(sc.streak, 0);
   assert.equal(sc.accuracy(), 66);
