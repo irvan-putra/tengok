@@ -304,6 +304,27 @@ if pitch is None or pitch not in keymap:
     print("game never waited for the first note, pitch:", pitch)
     sys.exit(1)
 keymap = pan_vs_strike_proof(pitch, keymap, "FAILED-midi-game-pan")
+
+
+def jittery_tap_strikes(pitch, keymap):
+    # Physical-phone report (0.3.2): taps almost never struck. A real finger
+    # rolls vertically during a tap; the scrolling parent stole the stream
+    # and the tap died as ACTION_CANCEL. Roll ~40px inside the key: over the
+    # parent's scroll slop, under the keyboard's 3x-slop cancel. Real input,
+    # not a direct method call.
+    x, y = keymap[pitch]
+    adb("shell", "logcat", "-c")
+    adb("shell", "input", "swipe", str(x), str(y), str(x + 2), str(y + 40), "120")
+    time.sleep(1)
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    if "TENGOK-GAME-TAP pitch=%d" % pitch not in out:
+        shot("FAILED-midi-game-jitter")
+        print("a tap with finger-roll vertical jitter did not strike:", (x, y))
+        sys.exit(1)
+    print("jittery tap (40px vertical roll) struck pitch", pitch)
+
+
+jittery_tap_strikes(pitch, keymap)
 scored = False
 for attempt in range(2):
     x, y = keymap[pitch]
