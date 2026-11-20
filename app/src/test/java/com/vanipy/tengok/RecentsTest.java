@@ -21,34 +21,30 @@ public class RecentsTest {
     @Test
     public void roundTripKeepsOrderAndTrickyNames() {
         List<Recents.Entry> in = new ArrayList<>();
-        in.add(new Recents.Entry("content://a/1", "song\twith\ttabs.mid", 200, true));
+        in.add(e("content://a/1", "song\twith\ttabs.mid", 200));
         in.add(e("content://a/2", "new\nline cântina 🎵.mid", 100));
         List<Recents.Entry> out = Recents.decode(Recents.encode(in));
         assertEquals(2, out.size());
         assertEquals("content://a/1", out.get(0).uri);
         assertEquals("song\twith\ttabs.mid", out.get(0).name);
         assertEquals(200, out.get(0).ts);
-        assertTrue(out.get(0).granted);
         assertEquals("new\nline cântina 🎵.mid", out.get(1).name);
-        assertTrue(!out.get(1).granted);
     }
 
     @Test
-    public void legacyThreeFieldLinesDecodeWithoutAGrant() {
-        // 0.3.2's first codec had no grant flag; those entries must never be
-        // treated as owning a releasable grant
+    public void aFourthFieldIsIgnored() {
+        // an earlier format carried a fourth field per line; it must not
+        // break decoding
         List<Recents.Entry> in = new ArrayList<>();
         in.add(e("content://a/7", "seven", 7));
-        StringBuilder legacy = new StringBuilder();
+        StringBuilder four = new StringBuilder();
         for (String line : Recents.encode(in).split("\n")) {
             if (line.isEmpty()) continue;
-            String[] f = line.split("\t");
-            legacy.append(f[0]).append('\t').append(f[1]).append('\t').append(f[2]).append('\n');
+            four.append(line).append('\t').append('1').append('\n');
         }
-        List<Recents.Entry> out = Recents.decode(legacy.toString());
+        List<Recents.Entry> out = Recents.decode(four.toString());
         assertEquals(1, out.size());
         assertEquals("seven", out.get(0).name);
-        assertTrue(!out.get(0).granted);
     }
 
     @Test

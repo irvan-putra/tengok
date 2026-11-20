@@ -31,18 +31,11 @@ public final class Recents {
         public final String uri;
         public final String name;
         public final long ts;
-        /** True only when tengok itself took a persistable grant for this Uri. */
-        public final boolean granted;
 
         public Entry(String uri, String name, long ts) {
-            this(uri, name, ts, false);
-        }
-
-        public Entry(String uri, String name, long ts, boolean granted) {
             this.uri = uri;
             this.name = name;
             this.ts = ts;
-            this.granted = granted;
         }
     }
 
@@ -59,17 +52,15 @@ public final class Recents {
     }
 
     /**
-     * One entry per line: base64url(uri) TAB base64url(name) TAB openedAtMs TAB
-     * grant flag ("1"/"0"). Three-field lines from older versions decode with
-     * the flag false - never releasing a grant we cannot prove we took.
+     * One entry per line: base64url(uri) TAB base64url(name) TAB openedAtMs.
+     * A fourth field, if present, is ignored (an earlier format carried one).
      */
     static String encode(List<Entry> entries) {
         StringBuilder sb = new StringBuilder();
         for (Entry e : entries) {
             sb.append(b64(e.uri)).append('\t')
                     .append(b64(e.name == null ? "file" : e.name)).append('\t')
-                    .append(e.ts).append('\t')
-                    .append(e.granted ? '1' : '0').append('\n');
+                    .append(e.ts).append('\n');
         }
         return sb.toString();
     }
@@ -83,8 +74,7 @@ public final class Recents {
             String[] f = line.split("\t");
             if (f.length != 3 && f.length != 4) continue;
             try {
-                out.add(new Entry(unb64(f[0]), unb64(f[1]), Long.parseLong(f[2]),
-                        f.length == 4 && f[3].equals("1")));
+                out.add(new Entry(unb64(f[0]), unb64(f[1]), Long.parseLong(f[2])));
             } catch (RuntimeException bad) {
                 // skip the line
             }
@@ -126,54 +116,31 @@ public final class Recents {
      */
     public static void record(Context ctx, Uri uri, String name) {
         if (uri == null || !"content".equals(uri.getScheme())) return;
-        boolean took = false;
         try {
             ctx.getContentResolver().takePersistableUriPermission(
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            took = true;
         } catch (RuntimeException ignored) {
             // not every provider offers a persistable grant; tree grants still reopen
         }
         SharedPreferences p = prefs(ctx);
-        List<Entry> old = decode(p.getString(KEY, ""));
-        // a grant taken on an earlier open of this same Uri is still held
-        for (Entry e : old) {
-            if (e.uri.equals(uri.toString()) && e.granted) {
-                took = true;
-                break;
-            }
-        }
-        List<Entry> l = upsert(old,
-                new Entry(uri.toString(), name, System.currentTimeMillis(), took));
+        List<Entry> l = upsert(decode(p.getString(KEY, "")),
+                new Entry(uri.toString(), name, System.currentTimeMillis()));
         p.edit().putString(KEY, encode(l)).apply();
         DiagLog.log(ctx, "RECENTS op=record n=" + l.size());
     }
 
     /**
-     * Clears one entry. Only a grant this entry itself recorded as taken is
-     * released - a folder's tree grant (the explorer's access) and anything
-     * shared is never touched. The file itself is never touched either way.
+     * Clears one entry from the list, nothing else: the file is never
+     * touched, and read access Android already granted (a per-document
+     * persisted grant or a folder's tree grant) is deliberately kept, so the
+     * list can be pruned without ever costing the user access they once
+     * approved. Persisted grants stay well under Android's per-app cap at
+     * this list's size.
      */
     public static void remove(Context ctx, String uri) {
         SharedPreferences p = prefs(ctx);
-        List<Entry> old = decode(p.getString(KEY, ""));
-        boolean held = false;
-        for (Entry e : old) {
-            if (e.uri.equals(uri) && e.granted) {
-                held = true;
-                break;
-            }
-        }
-        List<Entry> l = remove(old, uri);
+        List<Entry> l = remove(decode(p.getString(KEY, "")), uri);
         p.edit().putString(KEY, encode(l)).apply();
-        if (held) {
-            try {
-                ctx.getContentResolver().releasePersistableUriPermission(
-                        Uri.parse(uri), Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            } catch (RuntimeException ignored) {
-                // nothing persisted for this Uri - fine
-            }
-        }
         DiagLog.log(ctx, "RECENTS op=remove n=" + l.size());
     }
 }
