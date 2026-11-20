@@ -111,7 +111,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
    * striking finger does not cover it. Only judged hits (Perfect/Good)
    * spark; a plain registered tap keeps the quiet dim/grey flash, so
    * sparks always mean "that one scored". */
-  const SPARK_MS = 420;
+  const SPARK_MS = 480;
   const sparks = []; // { x, y, vx, vy, t, color }
 
   function nowSec() {
@@ -159,15 +159,15 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   function spawnSparks(pitch, grade) {
     const x = (kw.leftPx(pitch) - vx)
         + (G.isBlack(pitch) ? kw.blackW() : kw.whiteW) / 2;
-    const y = canvas.height - KEY_H - 4; // just above the hit line
+    const y = canvas.height - KEY_H - 8; // clear of the hit line and the finger
     const color = grade === G.PERFECT ? "255,216,77" : "155,225,93";
-    for (let i = 0; i < 10; i++) {
-      const a = (-160 + Math.random() * 140) * Math.PI / 180; // upward fan
-      const v = 0.14 + Math.random() * 0.30; // px per ms
+    for (let i = 0; i < 12; i++) {
+      const a = (-165 + Math.random() * 150) * Math.PI / 180; // upward fan
+      const v = 0.22 + Math.random() * 0.38; // px per ms
       sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
           t: performance.now(), color });
     }
-    while (sparks.length > 60) sparks.shift();
+    while (sparks.length > 72) sparks.shift();
   }
 
   function updateHud() {
@@ -419,10 +419,10 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       if (age > SPARK_MS) { sparks.splice(i, 1); continue; }
       const t = age / SPARK_MS;
       const sx = s.x + s.vx * age;
-      const sy = s.y + s.vy * age + 0.0006 * age * age;
-      g.fillStyle = `rgba(${s.color},${(0.9 * (1 - t)).toFixed(3)})`;
+      const sy = s.y + s.vy * age + 0.0005 * age * age;
+      g.fillStyle = `rgba(${s.color},${(1 - t).toFixed(3)})`;
       g.beginPath();
-      g.arc(sx, sy, 2.6 - 1.4 * t, 0, Math.PI * 2);
+      g.arc(sx, sy, 3.4 - 1.4 * t, 0, Math.PI * 2);
       g.fill();
     }
 

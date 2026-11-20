@@ -79,9 +79,9 @@ public final class GameView extends View {
      *  where the striking finger does not cover it. Only judged hits spark;
      *  a plain registered tap keeps the quiet dim/grey flash, so sparks
      *  always mean "that one scored". */
-    private static final long SPARK_MS = 420;
-    private static final int SPARK_MAX = 60;
-    private static final int SPARKS_PER_HIT = 10;
+    private static final long SPARK_MS = 480;
+    private static final int SPARK_MAX = 72;
+    private static final int SPARKS_PER_HIT = 12;
     /** x, y, vx (px/ms), vy (px/ms), born uptimeMs, color. */
     private final ArrayList<float[]> sparks = new ArrayList<>();
     private final Random sparkRng = new Random();
@@ -364,9 +364,9 @@ public final class GameView extends View {
                 if (age > SPARK_MS) { sparks.remove(i); continue; }
                 float t = age / (float) SPARK_MS;
                 float x = s[0] + s[2] * age;
-                float y = s[1] + s[3] * age + 0.0006f * d * age * age;
-                paint.setColor(((int) ((1 - t) * 230) << 24) | ((int) s[5] & 0x00FFFFFF));
-                canvas.drawCircle(x, y, (2.6f - 1.4f * t) * d, paint);
+                float y = s[1] + s[3] * age + 0.0005f * d * age * age;
+                paint.setColor(((int) ((1 - t) * 255) << 24) | ((int) s[5] & 0x00FFFFFF));
+                canvas.drawCircle(x, y, (3.4f - 1.4f * t) * d, paint);
             }
             if (!sparks.isEmpty()) postInvalidateDelayed(30);
         }
@@ -490,12 +490,12 @@ public final class GameView extends View {
     private void spawnSparks(int pitch, int color) {
         RectF kr = keyRect(pitch);
         float cx = kr.centerX();
-        float cy = kr.top - 4; // just above the hit line, clear of the finger
+        float cy = kr.top - 8; // clear of the hit line and the finger
         float d = getResources().getDisplayMetrics().density;
         long born = SystemClock.uptimeMillis();
         for (int i = 0; i < SPARKS_PER_HIT; i++) {
-            double a = Math.toRadians(-160 + sparkRng.nextFloat() * 140); // upward fan
-            float v = (0.14f + sparkRng.nextFloat() * 0.30f) * d;
+            double a = Math.toRadians(-165 + sparkRng.nextFloat() * 150); // upward fan
+            float v = (0.22f + sparkRng.nextFloat() * 0.38f) * d;
             sparks.add(new float[]{cx, cy,
                     (float) (Math.cos(a) * v), (float) (Math.sin(a) * v), born, color});
         }
