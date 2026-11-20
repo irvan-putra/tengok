@@ -253,8 +253,10 @@ if km:
 pitch = None
 for _ in range(20):  # second pad note at 12.5 s
     out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    # the pan proof cleared the log (drag-strike isolation), so the 12.0 s
+    # wait line is gone: the FIRST wait visible here is the 12.5 s note
     m = re.findall(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
-    if len(m) >= 2:
+    if len(m) >= 1:
         pitch = int(m[-1])
         break
     time.sleep(0.5)
@@ -296,7 +298,7 @@ for _ in range(20):
     if km:
         keymap = km
     m = re.findall(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
-    if len(m) >= 3:
+    if len(m) >= 2:  # post-clear buffer: 12.5 s wait plus this 29 s one
         pitch = int(m[-1])
         break
     time.sleep(0.5)
