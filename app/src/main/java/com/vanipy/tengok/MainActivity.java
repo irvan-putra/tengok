@@ -217,7 +217,7 @@ public class MainActivity extends Activity {
                 .setTitle("Remove from recent files?")
                 .setMessage("\"" + e.name + "\" stays exactly where it is; "
                         + "only its entry in this list is cleared. tengok never deletes files.")
-                .setPositiveButton("Remove", (d, w) -> {
+                .setPositiveButton("Remove from list", (d, w) -> {
                     Recents.remove(this, e.uri);
                     showHome();
                 })

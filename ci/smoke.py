@@ -213,6 +213,46 @@ def keymap_from(out):
             km[int(mm.group(1))] = ((int(mm.group(2)) + int(mm.group(3))) // 2, int(mm.group(4)))
     return km
 
+def vxkwd_from(out):
+    # screen width, viewport offset, white-key width in dp: freshest geometry line
+    m = re.findall(r"\| w=(\d+) h=\d+ loc=\d+,\d+ kb=\d+ lo=\d+ hi=\d+ vx=(-?\d+) kwd=(\d+)", out)
+    return (int(m[-1][2]), int(m[-1][1]), int(m[-1][0])) if m else None
+
+def pan_vs_strike_proof(pitch, keymap, failshot):
+    # Phone report: keys squeezed to a few millimetres. Two proofs in one:
+    # a sideways drag on the keys pans the board (vx moves) and NEVER strikes
+    # a note (no TAP/STRIKE), then follow resumes and re-centers the note.
+    gk = vxkwd_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
+    if gk is None or gk[0] < 44:
+        shot(failshot)
+        print("white key width below the 44dp finger minimum:", gk)
+        sys.exit(1)
+    x, y = keymap[pitch]
+    adb("shell", "logcat", "-c")
+    adb("shell", "input", "swipe", "800", str(y), "300", str(y), "300")
+    time.sleep(1)
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    if "TENGOK-GAME-TAP" in out or "TENGOK-GAME-STRIKE" in out:
+        shot(failshot)
+        print("a drag on the keys struck a note")
+        sys.exit(1)
+    moved = vxkwd_from(out)
+    if moved is None or moved[1] == gk[1]:
+        shot(failshot)
+        print("drag on the keys did not pan the board:", gk, moved)
+        sys.exit(1)
+    print("white keys", gk[0], "dp; drag panned vx", gk[1], "->", moved[1], "with no strike")
+    time.sleep(3.5)  # outlast the manual hold; follow re-centers the waiting note
+    km = keymap_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
+    if km:
+        keymap = km
+    x, y = keymap[pitch]
+    if not (0 < x < gk[2]):
+        shot(failshot)
+        print("follow did not bring the waiting key back on screen:", x)
+        sys.exit(1)
+    return keymap
+
 tap("Game", exact=True)
 time.sleep(2)  # let the game view reach its final layout before reading key geometry
 ready = None
@@ -251,6 +291,7 @@ if pitch is None or pitch not in keymap:
     shot("FAILED-midi-game")
     print("game never waited for the first note, pitch:", pitch)
     sys.exit(1)
+keymap = pan_vs_strike_proof(pitch, keymap, "FAILED-midi-game-pan")
 scored = False
 for attempt in range(2):
     x, y = keymap[pitch]
@@ -272,6 +313,7 @@ if not scored:
     sys.exit(1)
 print("game strike scored on the frozen note:", strikes)
 need("perfect 1")
+need("rank SSS")  # 100% accuracy plus the streak, live in the score line
 shot("05c-midi-game")
 tap("exit game", exact=True)
 need("MIDI format 0")
@@ -447,6 +489,7 @@ strike_until_scored(67, keymap)
 need("done!")
 need("miss 0")  # the skips landed on their runways without costing a note
 need("accuracy 100%")
+need("rank SSS")  # final grade: accuracy plus the best streak the round held
 shot("05f-midi-game-done")
 # a done round restarts deliberately on play
 adb("shell", "logcat", "-c")
@@ -765,6 +808,38 @@ tap("Browse a folder")
 time.sleep(2.5)
 need("smoke.mid")
 shot("13e-explorer-persisted")
+back()
+time.sleep(1)
+
+# ---- recent files: reopen one tap away; removal clears only the list ----
+need("Recent files")
+need("smoke.mid")
+shot("13f-recents")
+tap("smoke.mid")  # newest entry: the file just opened through the explorer
+time.sleep(2.5)
+need("MIDI format 1")
+shot("13g-recent-reopen")
+back()
+time.sleep(1)
+need("Recent files")
+for _ in range(6):  # remove every entry until the section folds away
+    if not present("Recent files"):
+        break
+    tap("Remove", exact=True)
+    time.sleep(1)
+    need("Remove from recent files?")
+    tap("Remove from list", exact=True)
+    time.sleep(1)
+if present("Recent files"):
+    shot("FAILED-recents-remove")
+    print("recent files section still visible after removing every entry")
+    sys.exit(1)
+shot("13h-recents-cleared")
+# removing the entries must not take the folder's access with them:
+tap("Browse a folder")
+time.sleep(2.5)
+need("smoke.mid")
+shot("13i-explorer-grant-intact")
 back()
 time.sleep(1)
 

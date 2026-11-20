@@ -324,7 +324,9 @@ public final class GameView extends View {
                     .append(" loc=").append(loc[0]).append(',').append(loc[1])
                     .append(" kb=").append(keyboardH())
                     .append(" lo=").append(loPitch).append(" hi=").append(hiPitch)
-                    .append(" vx=").append((int) viewportX);
+                    .append(" vx=").append((int) viewportX)
+                    .append(" kwd=").append((int) (kw.whiteW
+                            / getResources().getDisplayMetrics().density));
             Log.i(TAG, sb.toString());
         }
     }
