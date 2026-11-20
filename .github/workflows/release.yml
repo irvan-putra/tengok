@@ -14,7 +14,7 @@ jobs:
     # patuh pre-publish source gate: package, version format, label,
     # permission/license drift, family icon geometry, badge reads the
     # candidate version. A failure stops the release before anything builds.
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@b3c5d671164812ea06fb44857b0f0a423ade0d66
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f3cb449a57f9ce66af74cf83e7af6bd6dddb95c9
     with:
       app: tengok
       published: false
@@ -87,7 +87,7 @@ jobs:
     # patuh checks the built APK's actual bytes (packaged icon badge) before
     # anything is published. This is the preventive boundary.
     needs: release
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@b3c5d671164812ea06fb44857b0f0a423ade0d66
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f3cb449a57f9ce66af74cf83e7af6bd6dddb95c9
     with:
       app: tengok
       published: false
@@ -139,7 +139,7 @@ jobs:
     # The kaji gallery card is updated by the release owner right after
     # publish; re-run this job once the card matches.
     needs: publish
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@b3c5d671164812ea06fb44857b0f0a423ade0d66
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f3cb449a57f9ce66af74cf83e7af6bd6dddb95c9
     with:
       app: tengok
       published: true
