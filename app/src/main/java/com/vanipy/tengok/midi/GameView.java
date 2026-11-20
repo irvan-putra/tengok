@@ -47,9 +47,9 @@ public final class GameView extends View {
     private static final long STRIKE_GRACE_MS = 90;
     /** While a judged hit's key stays held, fresh sparks re-emit at this pace. */
     private static final long HELD_SPARK_MS = 110;
-    /** Follow glide: ease rate per second, capped at this many screens/second. */
-    private static final float FOLLOW_RATE = 4f;
-    private static final float FOLLOW_MAX_SCREENS_PER_SEC = 1.5f;
+    /** Follow glide: minimum sweep duration and peak speed in screens/second. */
+    private static final float FOLLOW_MIN_MS = 320f;
+    private static final float FOLLOW_PEAK_SCREENS_PER_SEC = 0.9f;
     /** Keep this much slack at the board edges and start gliding early. */
     private static final float FOLLOW_MARGIN_DP = 18f;
 
@@ -90,7 +90,10 @@ public final class GameView extends View {
     private int heldSparkPitch = -1;
     private int heldSparkColor;
     private long lastHeldSparkMs;
-    private long lastFollowTickMs;
+    private float tweenFrom;
+    private float tweenDest;
+    private long tweenStartMs;
+    private long tweenDurMs;
     /** Last judged strike, flashed briefly on its key in the grade's color. */
     private int flashPitch = -1;
     private int flashGrade = 0;
@@ -212,20 +215,35 @@ public final class GameView extends View {
                 && kw.rightPx(hi) - viewportX <= getWidth() - margin) return;
         float target = kw.viewportCentering(lo, hi);
         float diff = target - viewportX;
-        if (snap || Math.abs(diff) < 1f) {
+        if (snap) {
             viewportX = target;
+            tweenFrom = tweenDest = target;
+            tweenStartMs = 0;
             return;
         }
-        // Time-based glide with a speed cap: the board drifts to the next
-        // cluster instead of jumping, however far away that cluster sits.
+        if (Math.abs(diff) < 1f) {
+            viewportX = target;
+            tweenDest = target;
+            tweenStartMs = 0;
+            return;
+        }
+        // Fixed-duration smoothstep glide: zero speed at both ends, so the
+        // board sweeps to the next cluster without a visible lurch, however
+        // far away that cluster sits. A retarget restarts the sweep from
+        // wherever the board is now.
         long tick = SystemClock.uptimeMillis();
-        float dt = lastFollowTickMs == 0 ? 0.033f
-                : Math.min(0.1f, (tick - lastFollowTickMs) / 1000f);
-        lastFollowTickMs = tick;
-        float step = diff * FOLLOW_RATE * dt;
-        float cap = getWidth() * FOLLOW_MAX_SCREENS_PER_SEC * dt;
-        if (step > cap) step = cap; else if (step < -cap) step = -cap;
-        viewportX = Math.abs(step) >= Math.abs(diff) ? target : viewportX + step;
+        if (tweenStartMs == 0
+                || Math.abs(target - tweenDest)
+                        > getResources().getDisplayMetrics().density * 4f) {
+            tweenFrom = viewportX;
+            tweenDest = target;
+            tweenStartMs = tick;
+            tweenDurMs = (long) Math.max(FOLLOW_MIN_MS, 1.5f * Math.abs(target - viewportX)
+                    / (getWidth() * FOLLOW_PEAK_SCREENS_PER_SEC) * 1000f);
+        }
+        float t = Math.min(1f, (tick - tweenStartMs) / (float) tweenDurMs);
+        float e = t * t * (3f - 2f * t);
+        viewportX = tweenFrom + (tweenDest - tweenFrom) * e;
     }
 
     /** Keyboard strip height, always derived from the current laid-out height. */
@@ -295,12 +313,12 @@ public final class GameView extends View {
         canvas.drawRect(0, 0, w, h, paint);
 
         // falling notes of the player's track, velocity-shaded like the viewer.
-        // Judged state stays visible: played notes are gone, misses fall gray,
-        // so scrubbing back along the timeline shows the round as it stands.
+        // Judged state stays visible: struck notes keep sinking into the piano
+        // behind the keys, misses fall gray, so scrubbing back along the
+        // timeline shows the round as it stands.
         for (int i = 0; i < notes.size(); i++) {
             MidiFile.Note n = notes.get(i);
             int state = scoring != null ? scoring.stateOf(i) : GameScoring.PENDING;
-            if (state == GameScoring.PERFECT || state == GameScoring.GOOD) continue;
             double y1 = hitY - (n.startSec * 1000.0 - nowMs) / 1000.0 * pxPerSec;
             double y0 = hitY - (n.endSec * 1000.0 - nowMs) / 1000.0 * pxPerSec;
             if (y1 < 0 || y0 > hitY) continue;
@@ -495,6 +513,8 @@ public final class GameView extends View {
                 }
                 if (panning) {
                     viewportX = kw.clampViewport(viewportX - (x - lastX));
+                    tweenFrom = tweenDest = viewportX;
+                    tweenStartMs = 0;
                     lastX = x;
                     manualHoldUntil = SystemClock.uptimeMillis() + MANUAL_HOLD_MS;
                     invalidate();
@@ -552,15 +572,16 @@ public final class GameView extends View {
 
     private void spawnSparks(int pitch, int color, int count) {
         RectF kr = keyRect(pitch);
-        float cx = kr.centerX();
-        float cy = kr.top - 8; // clear of the hit line and the finger
         float d = getResources().getDisplayMetrics().density;
         long born = SystemClock.uptimeMillis();
         for (int i = 0; i < count; i++) {
-            double a = Math.toRadians(-165 + sparkRng.nextFloat() * 150); // upward fan
-            float v = (0.22f + sparkRng.nextFloat() * 0.38f) * d;
-            sparks.add(new float[]{cx, cy,
-                    (float) (Math.cos(a) * v), (float) (Math.sin(a) * v), born, color});
+            // a tight column at the border between the falling notes and the
+            // piano: inside the struck key's width, just above its top
+            float x = kr.left + kr.width() * (0.25f + sparkRng.nextFloat() * 0.5f);
+            float y = kr.top - 2 * d;
+            float vx = (sparkRng.nextFloat() - 0.5f) * 0.04f * d;
+            float vy = -(0.06f + sparkRng.nextFloat() * 0.10f) * d;
+            sparks.add(new float[]{x, y, vx, vy, born, color});
         }
         while (sparks.size() > SPARK_MAX) sparks.remove(0);
         postInvalidateDelayed(30);

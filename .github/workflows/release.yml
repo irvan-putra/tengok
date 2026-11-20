@@ -119,6 +119,8 @@ jobs:
 
           0.3.2 makes the on-screen piano playable on a phone: keys keep a finger-sized minimum width and the board pans by itself to keep the next notes in view; drag sideways on the keys to look around without striking. A tap still grades at the instant the finger lands. A live letter rank (D up to SSS, from accuracy plus your streak, so a miss pulls it down) shows in the lane while you play and as the final grade. The home screen keeps a recent-files list so a file opened once is one tap away: removing an entry only clears the list, the file itself is never touched, and reopening uses the access Android already granted. Still offline, still zero Android permissions.
 
+          0.3.8 polishes game feel: a struck note keeps sinking into the piano instead of vanishing on tap, the board glide sweeps smoothly to the next notes with no lurch at the start or end, and hit sparks stay in a tight column right at the border between the falling notes and the piano instead of spreading over the screen.
+
           The built-in folder explorer lists a folder you pick once, so you can open files without leaving the app. Browsing is read-only: no delete, rename or move.
 
           Signed with the tengok key (certificate SHA-256 ${EXPECTED_CERT_SHA256}).
