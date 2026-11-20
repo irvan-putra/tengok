@@ -85,12 +85,19 @@ function showMidi(container, file, midi, ctx) {
   minPitch = Math.max(0, minPitch - 1);
   maxPitch = Math.min(127, maxPitch + 1);
 
-  const PX_PER_SEC = 120;
   const ROW_H = 10;
-  const w = Math.max(320, Math.ceil(midi.durationSeconds * PX_PER_SEC) + 20);
+  const dpr = Math.min(2, root.devicePixelRatio || 1);
+  /* Browsers cap a canvas dimension (Chrome: 32767 backing px); a 6-minute
+   * song at 120 px/s and dpr 2 is ~86k px and renders as a broken image.
+   * Scale the px/s down so the backing store stays within the cap. */
+  const MAX_BACKING_W = 30000;
+  let pxPerSec = 120;
+  if ((midi.durationSeconds * pxPerSec + 20) * dpr > MAX_BACKING_W) {
+    pxPerSec = (MAX_BACKING_W / dpr - 20) / midi.durationSeconds;
+  }
+  const w = Math.max(320, Math.ceil(midi.durationSeconds * pxPerSec) + 20);
   const rows = maxPitch - minPitch + 1;
   const h = rows * ROW_H;
-  const dpr = Math.min(2, root.devicePixelRatio || 1);
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   canvas.style.width = w + "px";
@@ -115,8 +122,8 @@ function showMidi(container, file, midi, ctx) {
       g.fillRect(0, y, w, ROW_H);
     }
     for (const n of midi.notes) {
-      const x = n.startSec * PX_PER_SEC;
-      const nw = Math.max(2, (n.endSec - n.startSec) * PX_PER_SEC);
+      const x = n.startSec * pxPerSec;
+      const nw = Math.max(2, (n.endSec - n.startSec) * pxPerSec);
       g.globalAlpha = 0.35 + 0.65 * (n.velocity / 127);
       g.fillStyle = trackColor(n.track);
       g.fillRect(x, pitchY(n.pitch) + 1, nw, ROW_H - 2);
@@ -124,7 +131,7 @@ function showMidi(container, file, midi, ctx) {
     g.globalAlpha = 1;
     if (playheadSec !== undefined && playheadSec !== null) {
       g.fillStyle = "#1F2A5C";
-      g.fillRect(playheadSec * PX_PER_SEC, 0, 2, h);
+      g.fillRect(playheadSec * pxPerSec, 0, 2, h);
     }
   }
   drawRoll(null);
@@ -155,7 +162,7 @@ function showMidi(container, file, midi, ctx) {
     clock.textContent = fmtTime(songSec) + " / " + fmtTime(midi.durationSeconds);
     if (!seek.matches(":active")) seek.value = String(Math.floor(songSec * 1000));
     drawRoll(songSec);
-    const target = songSec * PX_PER_SEC - scroll.clientWidth * 0.25;
+    const target = songSec * pxPerSec - scroll.clientWidth * 0.25;
     scroll.scrollLeft = Math.max(0, target);
   }
 
