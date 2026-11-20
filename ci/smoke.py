@@ -276,6 +276,10 @@ if ready is None or not keymap:
     print("game never became ready or keyboard geometry missing:", ready, len(keymap))
     sys.exit(1)
 print("game ready, track", ready, "keys:", len(keymap))
+# zero judged notes is zero evidence: the score line must start unranked,
+# not award the top letter for nothing
+need("perfect 0")
+need("rank -")
 tap("wait for me: off", exact=True)  # toggles wait mode ON
 adb("shell", "logcat", "-c")
 tap("play", exact=True)

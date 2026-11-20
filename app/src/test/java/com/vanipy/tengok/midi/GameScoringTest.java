@@ -76,6 +76,28 @@ public class GameScoringTest {
     }
 
     @Test
+    public void unrankedUntilANoteIsJudged() {
+        GameScoring s = new GameScoring(song(12.0, 13.0), 1);
+        // zero judged notes is zero evidence: no top letter before playing,
+        // and an abandoned round earns no grade either
+        assertEquals(GameScoring.UNRANKED, s.rankLive());
+        assertEquals(GameScoring.UNRANKED, s.rankFinal());
+    }
+
+    @Test
+    public void rankFollowsJudgingAndMissesPullItDown() {
+        GameScoring s = new GameScoring(song(12.0, 13.0, 14.0, 15.0), 1);
+        s.strike(60, 12000); // perfect: 100% + streak 1
+        assertEquals("SSS", s.rankLive());
+        s.tick(13221); // the 13 s note's window closes: accuracy halves, streak resets
+        assertEquals("C", s.rankLive());
+        s.strike(60, 14000); // perfect: 66% + streak 1
+        assertEquals("B", s.rankLive());
+        s.tick(15221); // the last note slips: 50% + best-streak-1 bonus
+        assertEquals("C", s.rankFinal());
+    }
+
+    @Test
     public void lastStartAndBadTimesDescribeThePart() {
         GameScoring s = new GameScoring(song(12.0, 29.0, 12.5), 1);
         assertEquals(29000.0, s.lastStartMs(), 0.001);

@@ -69,13 +69,18 @@ public final class GameScoring {
         return perfect * 100 + good * 50;
     }
 
+    /** Shown while nothing has been judged yet: no evidence, no letter. */
+    public static final String UNRANKED = "-";
+
     /** Live show-off rank: accuracy plus the current streak's bonus. */
     public String rankLive() {
+        if (judged == 0) return UNRANKED;
         return GameRank.rank(accuracy(), streak);
     }
 
     /** Final grade: accuracy plus the best streak the round ever held. */
     public String rankFinal() {
+        if (judged == 0) return UNRANKED;
         return GameRank.rank(accuracy(), bestStreak);
     }
 
