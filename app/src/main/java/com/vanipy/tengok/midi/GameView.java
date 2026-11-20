@@ -63,6 +63,7 @@ public final class GameView extends View {
     private boolean viewportInit;
     private long manualHoldUntil;
     private float downX;
+    private float downY;
     private float lastX;
     private boolean panning;
     private int candidatePitch = -1;
@@ -349,6 +350,7 @@ public final class GameView extends View {
                 float x = e.getX();
                 float y = e.getY();
                 downX = lastX = x;
+                downY = y;
                 panning = false;
                 downEventMs = e.getEventTime();
                 candidatePitch = -1;
@@ -357,10 +359,18 @@ public final class GameView extends View {
                     if (gapHintSec > 0 && skipListener != null) skipListener.onSkip();
                 } else {
                     candidatePitch = pitchAt(x, y);
+                    // A real finger rolls a little vertically during a tap. Do
+                    // not let a scrolling parent steal the stream mid-tap and
+                    // turn it into a CANCEL - the keyboard owns this touch.
+                    android.view.ViewParent parent = getParent();
+                    if (parent != null) parent.requestDisallowInterceptTouchEvent(true);
                 }
                 return true;
             }
             case MotionEvent.ACTION_MOVE: {
+                if (!panning && Math.abs(e.getY() - downY) > touchSlop * 3) {
+                    candidatePitch = -1; // a deliberate vertical drag is not a tap
+                }
                 KeyWindow kw = keyWindow();
                 if (kw.maxViewport() <= 0) return true;
                 float x = e.getX();
