@@ -226,3 +226,14 @@ footer a { color: #3E6FB0; }
   word-break: break-all;
   max-width: 200px;
 }
+.samples-details { margin: 10px 0; }
+.samples-details summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-block;
+  margin: 0;
+}
+.samples-details summary::-webkit-details-marker { display: none; }
+.samples-details summary::before { content: "\25B8\00A0"; }
+.samples-details[open] summary::before { content: "\25BE\00A0"; }
+.samples-details .toolbar { margin-top: 8px; }
