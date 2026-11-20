@@ -458,7 +458,6 @@ need("perfect 0")
 print("round restarted on play after done")
 tap("exit game", exact=True)
 need("MIDI format 1")
-back()
 
 # the timeline scrubs the round: drag it into the song in a fresh round
 tap("Game", exact=True)
