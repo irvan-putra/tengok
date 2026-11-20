@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
-INDEX = DOCS / "index.html"
+PAGES = [DOCS / "index.html", DOCS / "selftest.html"]
 
 # Local asset references that get a stamp: src="js/x.js" or href="style.css",
 # with or without an existing ?v= stamp. Remote URLs are never touched.
@@ -49,20 +49,20 @@ def restamp(text, check):
 
 def main():
     check = "--check" in sys.argv
-    text = INDEX.read_text()
-    out, stale = restamp(text, check)
+    all_stale = []
+    for page in PAGES:
+        out, stale = restamp(page.read_text(), check)
+        all_stale += [page.name + ": " + x for x in stale]
+        if stale and not check:
+            page.write_text(out)
     if check:
-        if stale:
-            print("stale asset stamps: " + ", ".join(stale))
+        if all_stale:
+            print("stale asset stamps: " + ", ".join(all_stale))
             print("run: python3 ci/stamp_web.py")
             return 1
         print("asset stamps are current")
         return 0
-    if stale:
-        INDEX.write_text(out)
-        print("stamped: " + ", ".join(stale))
-    else:
-        print("already current")
+    print("stamped: " + ", ".join(all_stale) if all_stale else "already current")
     return 0
 
 
