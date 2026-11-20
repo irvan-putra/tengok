@@ -326,16 +326,21 @@ for gi, (label, gesture) in enumerate(GESTURES):
     if gi > 0:
         # The previous strike advanced the song: wait for the next note's
         # wait state and re-read geometry instead of tapping stale coords.
-        adb("shell", "logcat", "-c")
+        # The next freeze can fire fractions of a second after the strike,
+        # so clearing logcat first would erase it: instead anchor on the
+        # strike itself and take the first WAIT logged after it.
         pitch = None
         for _ in range(40):
             out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
             km = keymap_from(out)
             if km:
                 keymap = km
-            m = re.search(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
-            if m:
-                pitch = int(m.group(1))
+            events = list(re.finditer(r"TENGOK-GAME-(WAIT|STRIKE) pitch=(\d+)", out))
+            last_strike = max((i for i, e in enumerate(events)
+                               if e.group(1) == "STRIKE"), default=-1)
+            after = [e for e in events[last_strike + 1:] if e.group(1) == "WAIT"]
+            if after:
+                pitch = int(after[0].group(2))
                 break
             time.sleep(0.5)
         if pitch is None or pitch not in keymap:
