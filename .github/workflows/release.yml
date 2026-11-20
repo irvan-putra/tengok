@@ -1,7 +1,8 @@
 name: tengok signed release
 
-# Manual only. Builds the release APK, signs it with the tengok key from repository secrets,
-# verifies the signature and package, then publishes a GitHub pre-release with a direct APK link.
+# Manual only. patuh source gate first, then builds the release APK, signs it with the
+# tengok key from repository secrets, verifies the signature and package, byte-checks the
+# candidate via patuh, then publishes a GitHub pre-release and verifies it live.
 on:
   workflow_dispatch:
 
@@ -9,9 +10,21 @@ permissions:
   contents: write
 
 jobs:
+  consistency:
+    # patuh pre-publish source gate: package, version format, label,
+    # permission/license drift, family icon geometry, badge reads the
+    # candidate version. A failure stops the release before anything builds.
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@6f4b1eec2a8f73348725b7e3698d3e7bca93b890
+    with:
+      app: tengok
+      published: false
+
   release:
+    needs: consistency
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     env:
       EXPECTED_CERT_SHA256: "439CF7177600DCB04E32A197AD0BC1FD084B78DC329224201EC2A1845E9B8EE9"
     steps:
@@ -57,18 +70,50 @@ jobs:
           "$BT/aapt" dump badging "$APK" | head -3
           "$BT/aapt" dump badging "$APK" | grep -F "package: name='com.vanipy.tengok'"
           "$BT/aapt" dump badging "$APK" | grep -F "versionName='${VER}'"
+          if "$BT/apksigner" verify --print-certs "$APK" | grep -q 'DEBUG'; then exit 1; fi
           if "$BT/aapt" dump permissions "$APK" | grep -q 'uses-permission'; then exit 1; fi
           cp "$APK" "tengok-v${VER}.apk"
           sha256sum "tengok-v${VER}.apk" | tee "tengok-v${VER}.apk.sha256"
+      - name: Upload candidate APK for the byte check
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-apk
+          path: |
+            tengok-v${{ steps.v.outputs.version }}.apk
+            tengok-v${{ steps.v.outputs.version }}.apk.sha256
+          retention-days: 1
+
+  candidate-bytes:
+    # patuh checks the built APK's actual bytes (packaged icon badge) before
+    # anything is published. This is the preventive boundary.
+    needs: release
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@6f4b1eec2a8f73348725b7e3698d3e7bca93b890
+    with:
+      app: tengok
+      published: false
+      candidate_apk_artifact: candidate-apk
+
+  publish:
+    needs: candidate-bytes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_CERT_SHA256: "439CF7177600DCB04E32A197AD0BC1FD084B78DC329224201EC2A1845E9B8EE9"
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: candidate-apk, path: dist }
       - name: Publish pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VER="${{ steps.v.outputs.version }}"
+          VER="${{ needs.release.outputs.version }}"
+          cp "dist/tengok-v${VER}.apk" "dist/tengok-v${VER}.apk.sha256" .
           cat > notes.md <<NOTES
           tengok ${VER}: peek into any file. MIDI songs show their summary, instruments and a piano roll and play on the phone's built-in synth; images zoom; audio plays; text reads; everything else opens in a paged hex view with a details sheet (type, size, SHA-256). Offline, no accounts, zero Android permissions, files never leave the phone.
 
           Game mode turns any MIDI song into falling notes you can tap on an on-screen piano or play on a USB MIDI keyboard. Velocity and human timing stay as played, with no snapping. Scores and the diagnostic log stay on the phone; sharing a crash or diagnostics is always your tap.
+
+          0.3.1 fixes game mode for songs whose notes start late or pause for bars: instead of a blank lane, a "next note in N s - tap to jump" hint appears and a draggable song timeline with a clock shows position, like normal playback. Skipping forward never marks the upcoming note missed; played notes leave the lane; after the last note, play starts a fresh round. The score clock now follows playback speed.
 
           The built-in folder explorer lists a folder you pick once, so you can open files without leaving the app. Browsing is read-only: no delete, rename or move.
 
@@ -77,3 +122,14 @@ jobs:
           NOTES
           gh release create "v${VER}" "tengok-v${VER}.apk" "tengok-v${VER}.apk.sha256" \
             --title "tengok ${VER}" --notes-file notes.md --prerelease --target "${GITHUB_SHA}"
+
+  verify:
+    # post-publish: verifies the live release (tag, APK name, checksum,
+    # gallery card, downloaded sha256, packaged icon). Detects, cannot undo.
+    # The kaji gallery card is updated by the release owner right after
+    # publish; re-run this job once the card matches.
+    needs: publish
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@6f4b1eec2a8f73348725b7e3698d3e7bca93b890
+    with:
+      app: tengok
+      published: true
