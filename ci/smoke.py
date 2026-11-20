@@ -961,6 +961,101 @@ if "ERR view op=open ex=java.lang.SecurityException" not in log:
     print(log[-2000:])
     sys.exit(1)
 
+# ---- offline conversion through the real SAF picker ----
+# Proves the whole loop: viewer -> Convert card -> real DocumentsUI save ->
+# bytes read back over adb -> original untouched. Covers success with
+# readback (image + text), picker cancel, and an undecodable input.
+def sdcard_path(pattern):
+    out = adb("shell", "find", "/sdcard", "-name", pattern).stdout.decode("utf-8", "replace")
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("/sdcard/"):
+            return line
+    return None
+
+
+def fixture_hash(name):
+    return adb("shell", "run-as", PKG, "sha256sum", f"cache/{name}").stdout.decode().split()[0]
+
+
+adb("shell", "am", "start", "-n", f"{PKG}/.FixtureActivity")
+time.sleep(2)
+
+# image: PNG -> JPEG, bytes verified after the real picker save
+tap("Image: painted PNG")
+time.sleep(2)
+need("480 × 320")
+before = fixture_hash("painted.png")
+tap("Save as JPEG image")
+time.sleep(3)  # DocumentsUI inflates
+tap("Save", exact=True)
+need("Saved painted.jpg.")
+path = sdcard_path("painted*.jpg")
+if not path:
+    shot("FAILED-convert-jpeg")
+    print("converted JPEG not found under /sdcard")
+    sys.exit(1)
+data = adb("exec-out", "cat", path).stdout
+if not data.startswith(b"\xff\xd8\xff"):
+    shot("FAILED-convert-jpeg")
+    print("readback is not JPEG data:", data[:16])
+    sys.exit(1)
+print(f"convert readback: {len(data)} JPEG bytes at {path}")
+if fixture_hash("painted.png") != before:
+    print("FAIL: original file changed during conversion")
+    sys.exit(1)
+
+# picker cancel: no save, no file, no false status
+tap("Save as WebP image")
+time.sleep(3)
+back()
+time.sleep(1)
+if wait_present("Saved painted.webp", tries=3):
+    shot("FAILED-convert-cancel")
+    print("cancel path reported a save")
+    sys.exit(1)
+if sdcard_path("painted*.webp"):
+    shot("FAILED-convert-cancel")
+    print("cancel left a file behind")
+    sys.exit(1)
+print("convert cancel: no file, no saved status")
+back()
+time.sleep(1)
+
+# corrupt image: error surfaces, no silent failure
+tap("Image: corrupt PNG")
+time.sleep(2)
+need("can't show this image")
+tap("Save as PNG image")
+time.sleep(3)
+tap("Save", exact=True)
+need("Could not convert")
+print("convert error path: failure surfaced as status text")
+back()
+time.sleep(1)
+
+# text: latin-1 -> UTF-8, re-encoded bytes verified
+tap("Text: latin-1 cafe")
+time.sleep(2)
+tap("Save as UTF-8 text")
+time.sleep(3)
+tap("Save", exact=True)
+need("Saved latin1.txt.")
+path = sdcard_path("latin1*.txt")
+if not path:
+    shot("FAILED-convert-text")
+    print("converted text file not found under /sdcard")
+    sys.exit(1)
+data = adb("exec-out", "cat", path).stdout
+if b"caf\xc3\xa9" not in data or b"sm\xc3\xb8rrebr\xc3\xb8d" not in data:
+    shot("FAILED-convert-text")
+    print("readback is not the UTF-8 re-encode:", data[:40])
+    sys.exit(1)
+print(f"convert readback: {len(data)} UTF-8 bytes at {path}")
+back()
+time.sleep(1)
+shot("15-convert")
+
 # ---- launcher icon ----
 adb("shell", "input", "keyevent", "3")
 time.sleep(2)
