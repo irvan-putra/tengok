@@ -25,8 +25,11 @@ def shot(name):
 
 
 def nodes():
+    # the system SAF picker (DocumentsUI) can keep the accessibility bridge
+    # busy well past 5 s while its grid populates; uiautomator dump then
+    # fails with no output. Give the bridge a longer, patient window.
     last = ""
-    for _ in range(5):
+    for attempt in range(15):
         adb("shell", "rm", "-f", "/sdcard/ui.xml")
         dump = adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
         raw = adb("exec-out", "cat", "/sdcard/ui.xml")
@@ -37,10 +40,10 @@ def nodes():
             return [n.attrib for n in ET.fromstring(xml).iter("node")]
         except ET.ParseError:
             last = repr(xml) + "\n" + dump.stdout.decode("utf-8", "replace") + dump.stderr.decode("utf-8", "replace")
-            time.sleep(1)
+            time.sleep(2)
     open(f"{OUT}/ui-dump-failure.txt", "w").write(last)
     shot("FAILED-ui-dump")
-    raise RuntimeError("No valid UIAutomator XML after five attempts; raw diagnostic saved")
+    raise RuntimeError("No valid UIAutomator XML after fifteen attempts; raw diagnostic saved")
 
 
 def center(b):
