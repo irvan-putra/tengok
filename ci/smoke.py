@@ -878,9 +878,12 @@ if present("Show as hex instead"):
     print("hex fallback offered on a lost grant; it would fail the same way")
     sys.exit(1)
 shot("13j-access-lost")
-back()
-time.sleep(1)
-need("Open a file")  # home renders fine after the failure
+# the VIEW flow finishes MainActivity behind the viewer, so back lands on
+# the launcher, not tengok's home: start home explicitly to prove the app
+# is alive and renders fine after the failure
+adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity")
+time.sleep(2)
+need("Open a file")
 log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
 if "ERR view op=open ex=java.lang.SecurityException" not in log:
     print("EXPECTED IN diag.log: ERR view op=open ex=java.lang.SecurityException")
