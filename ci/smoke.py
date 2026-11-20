@@ -336,6 +336,8 @@ if not notes_line or notes_line.group(1) != "3" or notes_line.group(4) != "0":
     print("game notes diagnostic missing or wrong:", notes_line)
     sys.exit(1)
 print("empty-lane hint announced the 12 s entrance:", hint, "notes:", notes_line.groups())
+need("song timeline")  # the horizontal timeline, like normal playback
+need("/ 0:32")
 shot("05d-midi-game-hint")  # the hint text is canvas-drawn; this proves the pixels
 g = game_geometry(out)
 if g:
@@ -436,6 +438,25 @@ if pitch != 67:
 strike_until_scored(67, keymap)
 need("done!")
 shot("05f-midi-game-done")
+# the timeline scrubs the round: drag it back near the start
+n = find("song timeline")
+if not n:
+    shot("FAILED-midi-game-late")
+    print("song timeline not on screen after the round")
+    sys.exit(1)
+m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", n["bounds"])
+x1, y1, x2, y2 = map(int, m.groups())
+adb("shell", "input", "swipe", str((x1 + x2) // 2), str((y1 + y2) // 2),
+    str(x1 + 5), str((y1 + y2) // 2), "400")
+time.sleep(1)
+out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+scrub = re.findall(r"TENGOK-GAME-SCRUB mediaMs=(\d+)", out)
+if not scrub or int(scrub[-1]) > 5000:
+    shot("FAILED-midi-game-late")
+    print("timeline drag did not scrub near the start:", scrub)
+    sys.exit(1)
+print("timeline scrubbed back to:", scrub[-1])
+shot("05g-midi-game-scrub")
 tap("exit game", exact=True)
 need("MIDI format 1")
 back()

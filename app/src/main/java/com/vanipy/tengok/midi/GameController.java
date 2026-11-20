@@ -9,6 +9,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 
@@ -46,6 +47,8 @@ public final class GameController {
     private final GameView gameView;
     private final TextView status;
     private final TextView scoreLine;
+    private final SeekBar timeline;
+    private final TextView timelineClock;
     private final Button playPause;
     private final Button speedButton;
     private final Button waitButton;
@@ -64,6 +67,8 @@ public final class GameController {
     private boolean finished;
     private double frozenMs;
     private int hintForNote = -1;
+    private boolean scrubbing;
+    private String totalText = "";
 
     private final Runnable ticker = new Runnable() {
         @Override
@@ -103,6 +108,36 @@ public final class GameController {
         status = new TextView(ctx);
         status.setPadding(24, 8, 24, 0);
         root.addView(status);
+
+        // the same horizontal song timeline as normal playback, so position is
+        // visible even when no notes are falling; dragging scrubs the round
+        LinearLayout seekRow = new LinearLayout(ctx);
+        seekRow.setOrientation(LinearLayout.HORIZONTAL);
+        timeline = new SeekBar(ctx);
+        timeline.setMax(Math.max(1, (int) (midi.durationSeconds * 1000)));
+        timeline.setContentDescription("song timeline");
+        seekRow.addView(timeline, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        timelineClock = new TextView(ctx);
+        timelineClock.setPadding(24, 0, 24, 0);
+        seekRow.addView(timelineClock);
+        root.addView(seekRow);
+        timeline.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar sb, int progress, boolean fromUser) {
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar sb) {
+                scrubbing = true;
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar sb) {
+                scrubbing = false;
+                scrubTo(sb.getProgress());
+            }
+        });
 
         gameView = new GameView(ctx);
         root.addView(gameView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
@@ -148,6 +183,9 @@ public final class GameController {
         waiting = false;
         frozenMs = 0;
         hintForNote = -1;
+        totalText = MidiPanel.fmtTime(midi.durationSeconds);
+        timeline.setProgress(0);
+        timelineClock.setText("0:00 / " + totalText);
         // numbers only, no file or track names: lets a shared diagnostic log say
         // whether a blank lane was a late entrance or something wrong in the times
         Log.i(TAG, "TENGOK-GAME-NOTES track=" + userTrack + " count=" + scoring.total()
@@ -267,6 +305,20 @@ public final class GameController {
         }
     }
 
+    /**
+     * Drags on the song timeline, in score ms. Judging stays monotonic: notes
+     * already judged keep their verdict, and pending notes the scrub passes
+     * over are missed as the clock crosses them - the same honesty as the
+     * lane's tap-to-jump. A scrub while frozen simply unfreezes there.
+     */
+    private void scrubTo(int songMs) {
+        if (released || scoring == null || !prepared) return;
+        waiting = false;
+        gameView.setGapHint(-1);
+        hintForNote = -1;
+        seekSongMs(songMs, "SCRUB");
+    }
+
     /** Lane tap while a long gap is announced: jump to just before the next note. */
     private void onSkipToNext() {
         if (released || scoring == null || waiting || finished) return;
@@ -282,6 +334,10 @@ public final class GameController {
     private void tick() {
         if (scoring == null) return;
         double now = clockMs();
+        if (!scrubbing) {
+            timeline.setProgress((int) Math.min(now, timeline.getMax()));
+            timelineClock.setText(MidiPanel.fmtTime(now / 1000.0) + " / " + totalText);
+        }
         int next = scoring.nextPendingIndex();
         double nextMs = next < 0 ? -1 : scoring.noteStartMs(next);
         // wait mode: freeze the clock just before the next unplayed note
