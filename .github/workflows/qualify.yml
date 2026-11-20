@@ -48,7 +48,7 @@ jobs:
           find app/build/outputs/apk/debug -type f -name '*.apk'
           AAPT=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -type f -name aapt | sort -V | tail -1)
           "$AAPT" dump badging "$APK" | grep -F "package: name='com.vanipy.tengok' versionCode='${CODE}' versionName='${VER}'"
-          if "$AAPT" dump permissions "$APK" | grep -q 'uses-permission'; then echo "unexpected permission"; "$AAPT" dump permissions "$APK"; exit 1; fi
+          ci/check_permissions.sh "$AAPT" "$APK"
       - uses: actions/upload-artifact@v4
         with:
           name: tengok-qualification-${{ github.sha }}
