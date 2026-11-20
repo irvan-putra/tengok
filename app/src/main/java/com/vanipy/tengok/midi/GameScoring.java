@@ -5,15 +5,23 @@ import java.util.List;
 /**
  * Game-mode hit judging. Every note in the player's track is judged on its
  * own clock: a tap (or a MIDI keyboard note-on) within +-PERFECT_MS of the
- * note's start is Perfect, within +-GOOD_MS is Good, anything later is a
- * Miss. Because notes are judged independently, a chord rolled slightly
- * late finger by finger - the way people actually play - scores each note
- * on its own merit instead of demanding robotic simultaneity. Velocity
- * from the tap/source is never judged; dynamics are expression, not error.
+ * note's start is Perfect, within the Good window is Good, anything outside
+ * is a Miss. The Good window is asymmetric on purpose: a real fingertip
+ * lands late far more often than early (touch + audio latency is all
+ * one-way), so GOOD_LATE_MS is wider than GOOD_EARLY_MS - and a note bar
+ * stays hittable for most of the time it is still visibly leaving, instead
+ * of dying silently while it looks playable. Because notes are judged
+ * independently, a chord rolled slightly late finger by finger - the way
+ * people actually play - scores each note on its own merit instead of
+ * demanding robotic simultaneity. Velocity from the tap/source is never
+ * judged; dynamics are expression, not error.
  */
 public final class GameScoring {
     public static final long PERFECT_MS = 100;
-    public static final long GOOD_MS = 220;
+    /** A tap this far before the note still counts. Early taps are rare. */
+    public static final long GOOD_EARLY_MS = 200;
+    /** A tap this far after the note still counts - the common human case. */
+    public static final long GOOD_LATE_MS = 400;
 
     public static final int PENDING = 0;
     public static final int PERFECT = 1;
@@ -96,18 +104,20 @@ public final class GameScoring {
 
     /**
      * A key was struck at timeMs (song clock). Grades the nearest still
-     * pending note of this pitch within the GOOD window, if any.
+     * pending note of this pitch within the Good window, if any.
      * @return PENDING (no matching note), PERFECT or GOOD.
      */
     public int strike(int pitch, double timeMs) {
         int best = -1;
-        double bestAbs = GOOD_MS + 1;
+        double bestAbs = GOOD_LATE_MS + 1;
         for (int i = 0; i < noteIdx.length; i++) {
             if (state[i] != PENDING) continue;
             MidiFile.Note n = midi.notes.get(noteIdx[i]);
             if (n.pitch != pitch) continue;
-            double d = Math.abs(n.startSec * 1000.0 - timeMs);
-            if (d <= GOOD_MS && d < bestAbs) {
+            double signed = timeMs - n.startSec * 1000.0; // +: late, -: early
+            if (signed < -GOOD_EARLY_MS || signed > GOOD_LATE_MS) continue;
+            double d = Math.abs(signed);
+            if (d < bestAbs) {
                 bestAbs = d;
                 best = i;
             }
@@ -127,7 +137,7 @@ public final class GameScoring {
         for (int i = 0; i < noteIdx.length; i++) {
             if (state[i] != PENDING) continue;
             MidiFile.Note n = midi.notes.get(noteIdx[i]);
-            if (n.startSec * 1000.0 + GOOD_MS < nowMs) {
+            if (n.startSec * 1000.0 + GOOD_LATE_MS < nowMs) {
                 state[i] = MISS;
                 miss++;
                 streak = 0;

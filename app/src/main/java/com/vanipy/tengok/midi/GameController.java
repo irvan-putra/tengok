@@ -277,6 +277,7 @@ public final class GameController {
         double now = clockMs();
         if (!waiting) now = Math.max(0, now - delayMs);
         int grade = scoring.strike(pitch, now);
+        gameView.showStrikeGrade(pitch, grade);
         Log.i(TAG, "TENGOK-GAME-STRIKE pitch=" + pitch + " grade=" + grade + " ms=" + (int) now);
         if (waiting && waitMode) {
             waiting = false;
