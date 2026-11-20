@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- tengok asks for no permissions at all. Files arrive through the
          system picker or from other apps, and never leave the phone. -->
+
+    <!-- Media3 library manifests add these, but tengok only ever plays
+         local files and never touches the network or asks to stay awake,
+         so they are stripped to keep the app at zero permissions. Each
+         removal names the library that contributes it. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"
+        tools:node="remove" />
 
     <!-- Optional hardware: game mode can hear a USB MIDI keyboard through
          the system MIDI service. Not required - nothing else changes, and

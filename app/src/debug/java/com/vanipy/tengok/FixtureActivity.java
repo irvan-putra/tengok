@@ -39,6 +39,8 @@ public class FixtureActivity extends Activity {
         addButton(column, "Text: hello", "hello.txt", FixtureActivity::helloTxt);
         addButton(column, "Hex: random blob", "blob.bin", FixtureActivity::blob);
         addButton(column, "Image: painted PNG", "painted.png", FixtureActivity::paintedPng);
+        addButton(column, "Image: corrupt PNG", "corrupt.png", FixtureActivity::corruptPng);
+        addButton(column, "Text: latin-1 cafe", "latin1.txt", FixtureActivity::latin1Txt);
 
         setContentView(column);
     }
@@ -220,6 +222,21 @@ public class FixtureActivity extends Activity {
         bmp.compress(Bitmap.CompressFormat.PNG, 100, out);
         bmp.recycle();
         return out.toByteArray();
+    }
+
+    /** A valid PNG signature followed by garbage: sniffs as image, never decodes. */
+    static byte[] corruptPng() {
+        return new byte[]{
+                (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+                0x00, 0x00, 0x00, 0x0D, 'I', 'H', 'D', 'R',
+                0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
+        };
+    }
+
+    /** Non-ASCII text encoded ISO-8859-1: not valid UTF-8, exercises the charset table. */
+    static byte[] latin1Txt() {
+        return "caf\u00e9\nsm\u00f8rrebr\u00f8d\n".getBytes(
+                java.nio.charset.Charset.forName("ISO-8859-1"));
     }
 
     // ---- tiny SMF writer for fixtures ----
