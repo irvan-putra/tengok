@@ -70,6 +70,8 @@ jobs:
 
           Game mode turns any MIDI song into falling notes you can tap on an on-screen piano or play on a USB MIDI keyboard. Velocity and human timing stay as played, with no snapping. Scores and the diagnostic log stay on the phone; sharing a crash or diagnostics is always your tap.
 
+          The built-in folder explorer lists a folder you pick once, so you can open files without leaving the app. Browsing is read-only: no delete, rename or move.
+
           Signed with the tengok key (certificate SHA-256 ${EXPECTED_CERT_SHA256}).
           SHA-256 of the APK is in the attached .sha256 file.
           NOTES
