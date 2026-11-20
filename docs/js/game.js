@@ -502,8 +502,11 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     // Stay still while the cluster sits comfortably inside the board; glide
     // early, with a time-based ease and a speed cap, instead of jumping.
     const margin = 24;
-    if (kw.leftPx(loP) - vx >= margin && kw.rightPx(hiP) - vx <= canvas.clientWidth - margin) {
-      twStart = 0; // a frozen tween must not resume with a stale clock
+    if (!twStart
+        && kw.leftPx(loP) - vx >= margin && kw.rightPx(hiP) - vx <= canvas.clientWidth - margin) {
+      /* comfortable and no sweep in flight: stay still. A running sweep is
+       * NOT frozen here: it glides to its target so it eases out at the
+       * center instead of cutting to a dead stop at the margin. */
       return;
     }
     const target = kw.viewportCentering(Math.max(lo, loP - 2), Math.min(hi, hiP + 2));
@@ -520,6 +523,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     const u = Math.min(1, (t - twStart) / twDur);
     const e = u * u * (3 - 2 * u);
     vx = twFrom + (twDest - twFrom) * e;
+    if (u >= 1) twStart = 0; // sweep complete: idle until retriggered
   }
   let twFrom = 0, twDest = 0, twStart = 0, twDur = 1;
 
