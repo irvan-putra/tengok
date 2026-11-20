@@ -141,7 +141,7 @@ function showText(container, file, ctx) {
     container.appendChild(detailsCard(file, "text", null));
     return;
   }
-  file.arrayBuffer().then((buf) => {
+  return file.arrayBuffer().then((buf) => {
     let text;
     let encoding = "UTF-8";
     try {

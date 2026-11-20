@@ -60,6 +60,15 @@ keyboard geometry are line-faithful JavaScript ports of the Java originals;
 General MIDI sounds, Web MIDI availability, no folder access) are stated on
 the page itself.
 
+## Conversion ideas (recorded, not built)
+
+From Irvan, 2026-11-20, to revisit: text rendered to an image; OCR (image
+to text); music to PDF as sheet notes (two ideas: printing notation from a
+note format like MIDI, and the much harder transcribing of raw audio);
+voice transcribed to a PDF. Conversion itself is in scope for web and
+Android; supported pairs are always offline, originals untouched, quality
+loss stated per target.
+
 ## Building and checking
 
 ```

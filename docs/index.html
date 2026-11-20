@@ -53,6 +53,24 @@
       <li>The Android app remains the full tengok: it opens files from any app,
       remembers folders, and uses the phone's own MIDI synth.</li>
     </ul>
+    <div class="card-title">Converting files</div>
+    <p class="muted">tengok also converts between formats, always offline:
+    the original file stays untouched and the result downloads as a new file.
+    Open a file and look for the Convert card. Supported pairs are listed
+    there honestly, including what quality loss each target means. MIDI to
+    audio (rendered with the built-in synth) is planned, and wider engines
+    for video and documents are being assessed.</p>
+    <div class="card-title">Conversion ideas to revisit</div>
+    <p class="muted">Ideas from the project's owner, recorded here so they are
+    not lost. These are not working features yet:</p>
+    <ul class="limits">
+      <li>Text to image: render writing as a picture.</li>
+      <li>Image to text: OCR, reading the words out of a photo.</li>
+      <li>Music to PDF: sheet notes. Two different ideas hide here: printing
+      notation from a format that already has notes (like MIDI), and
+      transcribing raw audio into notes, which is much harder.</li>
+      <li>Voice to PDF: transcribe speech into a document.</li>
+    </ul>
     <p class="muted">Offline after this page loads. No accounts, no analytics,
     no uploads: files never leave this tab.</p>
   </section>
@@ -69,6 +87,7 @@
 <script src="js/game-core.js"></script>
 <script src="js/synth.js"></script>
 <script src="js/viewers.js"></script>
+<script src="js/convert.js"></script>
 <script src="js/midi-view.js"></script>
 <script src="js/game.js"></script>
 <script src="js/app.js"></script>

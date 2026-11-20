@@ -181,6 +181,13 @@ audio { width: 100%; margin-top: 4px; }
 .limits { margin: 4px 0 10px; padding-left: 20px; }
 .limits li { margin: 4px 0; }
 
+.convert-row {
+  border-top: 1px solid #EEF0F6;
+  padding: 6px 0;
+}
+
+.convert-note { margin-left: 2px; }
+
 .final { text-align: center; }
 
 footer {

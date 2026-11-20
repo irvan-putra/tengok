@@ -225,4 +225,48 @@ test("sniffer: mp4 magic does not claim a viewer", () => {
   assert.equal(S.byMagic(ftyp), null); // falls through to ext/hex, honestly
 });
 
+/* ---- Conversion encoders (pure functions) ---- */
+await import(join(root, "docs/js/convert.js"));
+const C = globalThis.TengokConvert;
+
+test("wav encoder: RIFF header and frame count", () => {
+  const left = new Float32Array([0, 0.5, -0.5, 1]);
+  const right = new Float32Array([1, -1, 0.25, 0]);
+  const wav = C.encodeWav([left, right], 22050);
+  const dv = new DataView(wav.buffer);
+  assert.equal(String.fromCharCode(...wav.slice(0, 4)), "RIFF");
+  assert.equal(String.fromCharCode(...wav.slice(8, 12)), "WAVE");
+  assert.equal(dv.getUint16(22, true), 2); // stereo
+  assert.equal(dv.getUint32(24, true), 22050);
+  assert.equal(dv.getUint32(40, true), 4 * 2 * 2); // frames*ch*2
+  assert.equal(wav.length, 44 + 16);
+  assert.equal(dv.getInt16(44, true), 0); // left[0]
+  assert.equal(dv.getInt16(46, true), 32767); // right[0] = 1.0
+  assert.equal(dv.getInt16(52, true), -16384); // frame 2 left = -0.5
+});
+test("wav encoder: clips out-of-range samples", () => {
+  const wav = C.encodeWav([new Float32Array([2, -2])], 8000);
+  const dv = new DataView(wav.buffer);
+  assert.equal(dv.getInt16(44, true), 32767);
+  assert.equal(dv.getInt16(46, true), -32767);
+});
+test("latin-1 encoder: ascii kept, unmappable becomes '?'", () => {
+  const out = C.encodeLatin1("ab\u00e9\u4e2d"); // é fits, 中 does not
+  assert.deepEqual(Array.from(out), [97, 98, 0xE9, 0x3F]);
+});
+test("text decode: UTF-8 first, Latin-1 fallback", () => {
+  assert.equal(C.decodeText(new Uint8Array([104, 105])).encoding, "UTF-8");
+  assert.equal(C.decodeText(new Uint8Array([0xE9])).encoding, "Latin-1");
+  assert.equal(C.decodeText(new Uint8Array([0xE9])).text, "\u00e9");
+});
+test("conversion targets exist for image/audio/text only", () => {
+  assert.equal(C.targetsFor("IMAGE").length, 3);
+  assert.equal(C.targetsFor("AUDIO").length, 1);
+  assert.equal(C.targetsFor("TEXT").length, 2);
+  assert.equal(C.targetsFor("MIDI").length, 0);
+  assert.equal(C.targetsFor("HEX").length, 0);
+  assert.equal(C.outName("photo.jpeg", "png"), "photo.png");
+  assert.equal(C.outName("noext", "wav"), "noext.wav");
+});
+
 console.log("\n" + passed + " tests passed" + (process.exitCode ? ", WITH FAILURES" : ""));
