@@ -81,19 +81,19 @@ function renderFilesBar() {
   filesBar.appendChild(clear);
 }
 
-/* The shareable URL of the current sample view, in the address bar and as
- * selectable text. User-opened files have no link: their bytes never leave
- * the device, so the parameter is cleared instead. */
+/* Status line above the file buttons: the shareable URL for a sample view,
+ * or an honest note for a local file (its bytes never leave the device, so
+ * there is no link to show). Stays visible across button and tab clicks. */
 function showSampleLink(entry) {
   if (entry && entry.sampleId) {
     const url = location.origin + location.pathname + "?sample=" + entry.sampleId;
     history.replaceState(null, "", "?sample=" + entry.sampleId);
     linkLine.textContent = "Link to this view: " + url;
-    linkLine.style.display = "";
   } else {
     history.replaceState(null, "", location.pathname);
-    linkLine.style.display = "none";
+    linkLine.textContent = "Local file: no link to copy. It stays on this device and is never uploaded.";
   }
+  linkLine.style.display = "";
 }
 
 function showEntry(index, forceKind) {
