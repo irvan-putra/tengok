@@ -35,7 +35,6 @@ public class ViewerActivity extends Activity {
     private TextView titleView;
     private MidiPanel midiPanel;
     private AudioPanel audioPanel;
-    private ConvertPanel convertPanel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,57 +122,26 @@ public class ViewerActivity extends Activity {
     private void showKind(Sniffer.Kind k) {
         kind = k;
         releasePlayers();
-        if (convertPanel != null) {
-            convertPanel.cancelRunning();
-            convertPanel = null;
-        }
         content.removeAllViews();
         switch (k) {
             case MIDI:
                 showMidi();
                 break;
             case IMAGE:
-                addWithConvert(ImagePanel.build(this, source, head), k);
+                content.addView(ImagePanel.build(this, source, head));
                 break;
             case AUDIO:
                 audioPanel = new AudioPanel();
-                addWithConvert(audioPanel.build(this, source), k);
+                content.addView(audioPanel.build(this, source));
                 break;
             case TEXT:
                 showText();
-                break;
-            case VIDEO:
-                // No video player yet; the bytes stay inspectable and the
-                // convert card offers MP4 re-encoding.
-                addWithConvert(HexPanel.build(this, source), k);
                 break;
             case HEX:
             default:
                 content.addView(HexPanel.build(this, source));
                 break;
         }
-    }
-
-    /** Panel on top, Convert card docked below when the kind has targets. */
-    private void addWithConvert(android.view.View panelView, Sniffer.Kind k) {
-        convertPanel = new ConvertPanel(this, source, k, head);
-        android.view.View card = convertPanel.build();
-        if (card == null) {
-            content.addView(panelView);
-            return;
-        }
-        LinearLayout wrap = new LinearLayout(this);
-        wrap.setOrientation(LinearLayout.VERTICAL);
-        wrap.addView(panelView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        wrap.addView(card);
-        content.addView(wrap);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (convertPanel != null) convertPanel.onDestination(requestCode, resultCode, data);
     }
 
     private void showMidi() {
@@ -201,7 +169,7 @@ public class ViewerActivity extends Activity {
     private void showText() {
         try {
             TextPanel.Result r = TextPanel.decode(source);
-            addWithConvert(TextPanel.build(this, r), Sniffer.Kind.TEXT);
+            content.addView(TextPanel.build(this, r));
         } catch (IOException e) {
             showError("tengok couldn't read this file", "read", e);
         }
@@ -332,10 +300,6 @@ public class ViewerActivity extends Activity {
     @Override
     protected void onDestroy() {
         releasePlayers();
-        if (convertPanel != null) {
-            convertPanel.cancelRunning();
-            convertPanel = null;
-        }
         super.onDestroy();
     }
 }

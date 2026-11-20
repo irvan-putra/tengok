@@ -10,7 +10,7 @@ import java.util.Locale;
  */
 public final class Sniffer {
 
-    public enum Kind {MIDI, IMAGE, AUDIO, VIDEO, TEXT, HEX}
+    public enum Kind {MIDI, IMAGE, AUDIO, TEXT, HEX}
 
     private Sniffer() {
     }
@@ -41,11 +41,8 @@ public final class Sniffer {
             if (brand.startsWith("heic") || brand.startsWith("heix") || brand.startsWith("hevc")
                     || brand.startsWith("mif1") || brand.startsWith("msf1") || brand.startsWith("avif")
                     || brand.startsWith("avis")) return Kind.IMAGE;
-            if (brand.startsWith("M4A ") || brand.startsWith("M4B ")) return Kind.AUDIO;
-            return Kind.VIDEO; // mp4/mov/3gp family: convertible, viewed as hex for now
+            return null; // mp4/mov family: video is not a v0.1 viewer
         }
-        if ((h[0] & 0xFF) == 0x1A && (h[1] & 0xFF) == 0x45 && (h[2] & 0xFF) == 0xDF
-                && (h[3] & 0xFF) == 0xA3) return Kind.VIDEO; // EBML: mkv/webm
         if (h[0] == 'O' && h[1] == 'g' && h[2] == 'g' && h[3] == 'S') return Kind.AUDIO;
         if (h[0] == 'f' && h[1] == 'L' && h[2] == 'a' && h[3] == 'C') return Kind.AUDIO;
         if (h[0] == 'I' && h[1] == 'D' && h[2] == '3') return Kind.AUDIO; // mp3 with tag
@@ -62,7 +59,6 @@ public final class Sniffer {
         if (m.equals("audio/mpeg") || m.equals("audio/mp4") || m.equals("audio/ogg")
                 || m.equals("audio/flac") || m.equals("audio/x-wav") || m.equals("audio/wav")
                 || m.equals("audio/aac") || m.equals("audio/opus") || m.equals("audio/3gpp")) return Kind.AUDIO;
-        if (m.startsWith("video/")) return Kind.VIDEO;
         if (m.startsWith("text/")) return Kind.TEXT;
         if (m.equals("application/json") || m.equals("application/xml")) return Kind.TEXT;
         return null;
@@ -97,14 +93,6 @@ public final class Sniffer {
             case "flac":
             case "wav":
             case "m4a":
-                return Kind.AUDIO;
-            case "mp4":
-            case "m4v":
-            case "mov":
-            case "mkv":
-            case "webm":
-            case "3gp":
-                return Kind.VIDEO;
             case "aac":
             case "opus":
             case "amr":
