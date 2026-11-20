@@ -17,6 +17,7 @@ let cleanups = [];
 
 const viewArea = document.getElementById("view");
 const filesBar = document.getElementById("files");
+const linkLine = document.getElementById("view-link");
 
 function runCleanups() {
   const fns = cleanups;
@@ -55,7 +56,10 @@ async function addFiles(list) {
 
 function renderFilesBar() {
   filesBar.replaceChildren();
-  if (entries.length < 2) return;
+  if (entries.length < 1) return;
+  const open = V.el("button", "btn", "+ Open a file");
+  open.addEventListener("click", () => document.getElementById("file-input").click());
+  filesBar.appendChild(open);
   for (let i = 0; i < entries.length; i++) {
     const b = V.el("button", "btn file-tab" + (i === current ? " active" : ""),
         entries[i].file.name || "file " + (i + 1));
@@ -71,8 +75,25 @@ function renderFilesBar() {
     viewArea.replaceChildren();
     document.getElementById("drop").style.display = "";
     document.getElementById("about").style.display = "";
+    history.replaceState(null, "", location.pathname);
+    linkLine.style.display = "none";
   });
   filesBar.appendChild(clear);
+}
+
+/* The shareable URL of the current sample view, in the address bar and as
+ * selectable text. User-opened files have no link: their bytes never leave
+ * the device, so the parameter is cleared instead. */
+function showSampleLink(entry) {
+  if (entry && entry.sampleId) {
+    const url = location.origin + location.pathname + "?sample=" + entry.sampleId;
+    history.replaceState(null, "", "?sample=" + entry.sampleId);
+    linkLine.textContent = "Link to this view: " + url;
+    linkLine.style.display = "";
+  } else {
+    history.replaceState(null, "", location.pathname);
+    linkLine.style.display = "none";
+  }
 }
 
 function showEntry(index, forceKind) {
@@ -83,6 +104,7 @@ function showEntry(index, forceKind) {
   viewArea.replaceChildren();
   document.getElementById("drop").style.display = "none";
   document.getElementById("about").style.display = "none";
+  showSampleLink(entries[index]);
 
   const { file } = entries[index];
   const kind = forceKind || entries[index].kind;
@@ -159,7 +181,13 @@ function loadSample(name) {
         const type = name.endsWith(".mid") ? "audio/midi"
             : name.endsWith(".png") ? "image/png"
             : name.endsWith(".wav") ? "audio/wav" : "text/plain";
-        addFiles([new File([blob], name, { type: type })]);
+        const before = entries.length;
+        addFiles([new File([blob], name, { type: type })]).then(() => {
+          for (const [sid, file] of SAMPLES) {
+            if (file === name && entries[before]) entries[before].sampleId = sid;
+          }
+          if (current === before) showSampleLink(entries[before]);
+        });
       })
       .catch((e) => {
         viewArea.replaceChildren(V.errorCard("Could not load the sample: " + e.message, null));
