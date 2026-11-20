@@ -54,9 +54,27 @@ async function addFiles(list) {
   showEntry(entries.length - files.length);
 }
 
+function goHome() {
+  entries = [];
+  current = -1;
+  runCleanups();
+  renderFilesBar();
+  viewArea.replaceChildren();
+  document.getElementById("drop").style.display = "";
+  document.getElementById("about").style.display = "";
+  history.replaceState(null, "", location.pathname);
+  linkLine.style.display = "none";
+}
+
 function renderFilesBar() {
   filesBar.replaceChildren();
   if (entries.length < 1) return;
+  const home = V.el("button", "btn", "\u2190 back to home");
+  home.addEventListener("click", () => {
+    goHome();
+    window.scrollTo(0, 0);
+  });
+  filesBar.appendChild(home);
   const open = V.el("button", "btn", "+ Open a file");
   open.addEventListener("click", () => document.getElementById("file-input").click());
   filesBar.appendChild(open);
@@ -67,17 +85,7 @@ function renderFilesBar() {
     filesBar.appendChild(b);
   }
   const clear = V.el("button", "btn", "Clear all");
-  clear.addEventListener("click", () => {
-    entries = [];
-    current = -1;
-    runCleanups();
-    renderFilesBar();
-    viewArea.replaceChildren();
-    document.getElementById("drop").style.display = "";
-    document.getElementById("about").style.display = "";
-    history.replaceState(null, "", location.pathname);
-    linkLine.style.display = "none";
-  });
+  clear.addEventListener("click", goHome);
   filesBar.appendChild(clear);
 }
 
