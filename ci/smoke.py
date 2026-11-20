@@ -966,12 +966,25 @@ if "ERR view op=open ex=java.lang.SecurityException" not in log:
 # bytes read back over adb -> original untouched. Covers success with
 # readback (image + text), picker cancel, and an undecodable input.
 def sdcard_path(pattern):
-    out = adb("shell", "find", "/sdcard", "-name", pattern).stdout.decode("utf-8", "replace")
+    # /sdcard is a symlink chain to the FUSE mount; -L follows it on every
+    # toybox/GNU find variant, and /storage/emulated/0 covers images where
+    # /sdcard itself resolves oddly. Stderr is captured for diagnosis.
+    rr = adb("shell", "find", "-L", "/sdcard", "/storage/emulated/0", "-name", pattern)
+    out = rr.stdout.decode("utf-8", "replace")
+    err = rr.stderr.decode("utf-8", "replace")
+    found = None
     for line in out.splitlines():
         line = line.strip()
-        if line.startswith("/sdcard/"):
-            return line
-    return None
+        if line.startswith("/sdcard/") or line.startswith("/storage/"):
+            found = line
+            break
+    if found is None:
+        print("sdcard_path diagnostics for", pattern)
+        print("find stdout:", out[:800])
+        print("find stderr:", err[:800])
+        print("Documents:", adb("shell", "ls", "-la", "/sdcard/Documents/").stdout.decode("utf-8", "replace")[:800])
+        print("Download:", adb("shell", "ls", "-la", "/sdcard/Download/").stdout.decode("utf-8", "replace")[:800])
+    return found
 
 
 def fixture_hash(name):
