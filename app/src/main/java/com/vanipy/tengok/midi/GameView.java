@@ -649,4 +649,56 @@ public final class GameView extends View {
         Log.i(TAG, "TENGOK-GAME-TAP pitch=" + pitch);
         if (listener != null) listener.onStrike(pitch, delayMs);
     }
+
+    /** DEBUG-ONLY test seam: synthesize a two-finger chord as MotionEvents
+     *  through dispatchTouchEvent - both keys down together, the second
+     *  finger lifting first. This is a synthetic dispatch, not real
+     *  hardware input; it exists because the CI emulator image accepts no
+     *  kernel-level multitouch injection. No-op in release builds. */
+    public void debugInjectChord(int pitchA, int pitchB) {
+        if (!com.vanipy.tengok.BuildConfig.DEBUG) return;
+        if (pitchA < 0 || pitchB < 0 || pitchA == pitchB) return;
+        RectF ra = keyRect(pitchA), rb = keyRect(pitchB);
+        if (ra.right < 0 || ra.left > getWidth() || rb.right < 0 || rb.left > getWidth()) {
+            Log.w(TAG, "TENGOK-GAME-CHORD-INJECT skipped, key offscreen a=" + pitchA + " b=" + pitchB);
+            return;
+        }
+        final float ax = ra.centerX(), ay = ra.centerY();
+        final float bx = rb.centerX(), by = rb.centerY();
+        final long t0 = SystemClock.uptimeMillis();
+        debugChordEvent(MotionEvent.ACTION_DOWN, t0, 1, ax, ay, 0, 0);
+        postDelayed(new Runnable() { public void run() { debugChordEvent(
+                MotionEvent.ACTION_POINTER_DOWN
+                        | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                t0, 2, ax, ay, bx, by); } }, 150);
+        postDelayed(new Runnable() { public void run() { debugChordEvent(
+                MotionEvent.ACTION_POINTER_UP
+                        | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                t0, 2, ax, ay, bx, by); } }, 650);
+        postDelayed(new Runnable() { public void run() { debugChordEvent(
+                MotionEvent.ACTION_UP, t0, 1, ax, ay, 0, 0); } }, 1850);
+        Log.i(TAG, "TENGOK-GAME-CHORD-INJECT a=" + pitchA + " b=" + pitchB
+                + " (synthetic dispatch, not real hardware)");
+    }
+
+    private void debugChordEvent(int action, long downTime, int count,
+                                 float x1, float y1, float x2, float y2) {
+        MotionEvent.PointerProperties[] pp = new MotionEvent.PointerProperties[count];
+        MotionEvent.PointerCoords[] pc = new MotionEvent.PointerCoords[count];
+        for (int i = 0; i < count; i++) {
+            pp[i] = new MotionEvent.PointerProperties();
+            pp[i].id = i;
+            pp[i].toolType = MotionEvent.TOOL_TYPE_FINGER;
+            pc[i] = new MotionEvent.PointerCoords();
+            pc[i].x = i == 0 ? x1 : x2;
+            pc[i].y = i == 0 ? y1 : y2;
+            pc[i].pressure = 1f;
+            pc[i].size = 1f;
+        }
+        MotionEvent ev = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(),
+                action, count, pp, pc, 0, 0, 1f, 1f, 0, 0,
+                android.view.InputDevice.SOURCE_TOUCHSCREEN, 0);
+        dispatchTouchEvent(ev);
+        ev.recycle();
+    }
 }
