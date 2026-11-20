@@ -206,10 +206,13 @@ shot("05b-midi-follow")
 
 # ---- game mode: falling notes, wait-for-me freeze, tap the right key ----
 def keymap_from(out):
+    # Key rectangles left of the viewport have negative left/right; the song
+    # range is wider than the board, so the leading entries are usually
+    # negative and a \d+-only pattern never matches.
     km = {}
-    keys = re.findall(r"TENGOK-GAME-KEYS((?: \d+:\d+,\d+,\d+)+)", out)
+    keys = re.findall(r"TENGOK-GAME-KEYS((?: -?\d+:-?\d+,-?\d+,\d+)+)", out)
     if keys:
-        for mm in re.finditer(r"(\d+):(\d+),(\d+),(\d+)", keys[-1]):
+        for mm in re.finditer(r"(-?\d+):(-?\d+),(-?\d+),(\d+)", keys[-1]):
             km[int(mm.group(1))] = ((int(mm.group(2)) + int(mm.group(3))) // 2, int(mm.group(4)))
     return km
 
