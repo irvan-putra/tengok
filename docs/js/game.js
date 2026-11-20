@@ -144,24 +144,34 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     ctx.showCurrentFile();
   });
 
-  function strike(pitch) {
+  function strike(pitch, ageMs = 0) {
     if (!running || ended) return;
-    const nowMs = nowSec() * 1000;
+    // ageMs anchors the judgment to when the finger landed, not when the
+    // gesture was recognized: a held key scores at its press time.
+    const nowMs = nowSec() * 1000 - ageMs;
     const grade = scoring.strike(pitch, nowMs);
     ctx.synth.strike(pitch, 100, judgedProgram);
     flashes.set(pitch, { t: performance.now(), grade });
     if (grade === G.PERFECT || grade === G.GOOD) {
-      spawnSparks(pitch, grade);
+      spawnSparks(pitch, grade, 12);
+      if (pressed.has(pitch)) {
+        // still held: keep sparkling until the finger lifts
+        heldSpark = { pitch, grade, lastEmit: performance.now() };
+      }
       updateHud();
     }
   }
 
-  function spawnSparks(pitch, grade) {
+  /* While a judged hit's key stays held, fresh sparks re-emit at this pace. */
+  const HELD_SPARK_MS = 110;
+  let heldSpark = null;
+
+  function spawnSparks(pitch, grade, count) {
     const x = (kw.leftPx(pitch) - vx)
         + (G.isBlack(pitch) ? kw.blackW() : kw.whiteW) / 2;
     const y = canvas.height - KEY_H - 8; // clear of the hit line and the finger
     const color = grade === G.PERFECT ? "255,216,77" : "155,225,93";
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < count; i++) {
       const a = (-165 + Math.random() * 150) * Math.PI / 180; // upward fan
       const v = 0.22 + Math.random() * 0.38; // px per ms
       sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
@@ -179,15 +189,28 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     countsEl.textContent = fmtCounts(scoring);
   }
 
-  /* Pointer input: tap strikes, horizontal drag pans. */
+  /* Pointer input: tap strikes, horizontal drag pans. A press held 90 ms
+   * without turning into a pan strikes in place, so the judgment and sparks
+   * land while the finger is still down; a drag past the slop first cancels
+   * the pending strike, so a real look-around drag still never strikes. */
+  const STRIKE_GRACE_MS = 90;
   const pointers = new Map();
   canvas.addEventListener("pointerdown", (e) => {
     canvas.setPointerCapture(e.pointerId);
-    const rec = { x: e.offsetX, y: e.offsetY, startX: e.offsetX, panning: false, pitch: -1 };
+    const rec = { x: e.offsetX, y: e.offsetY, startX: e.offsetX, panning: false, pitch: -1,
+        struck: false, downAt: performance.now(), graceTimer: 0 };
     const rect = canvas.getBoundingClientRect();
     if (e.clientY - rect.top >= canvas.clientHeight - KEY_H) {
       rec.pitch = kw.pitchAt(e.clientX - rect.left + vx);
-      if (rec.pitch >= 0) pressed.add(rec.pitch); // immediate "registered"
+      if (rec.pitch >= 0) {
+        pressed.add(rec.pitch); // immediate "registered"
+        rec.graceTimer = setTimeout(() => {
+          if (!rec.struck && rec.pitch >= 0 && !rec.panning) {
+            rec.struck = true;
+            strike(rec.pitch, performance.now() - rec.downAt);
+          }
+        }, STRIKE_GRACE_MS);
+      }
     }
     pointers.set(e.pointerId, rec);
   });
@@ -203,6 +226,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
         lastPanAt = performance.now();
       } else if (Math.abs(e.clientX - rect.left - p.startX) > 10) {
         p.panning = true; // a deliberate drag is not a tap
+        clearTimeout(p.graceTimer); // and a real drag never strikes
         if (p.pitch >= 0) { pressed.delete(p.pitch); p.pitch = -1; }
       }
       p.x = e.clientX - rect.left;
@@ -212,19 +236,23 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     const p = pointers.get(e.pointerId);
     pointers.delete(e.pointerId);
     if (!p) return;
+    clearTimeout(p.graceTimer);
     if (p.pitch >= 0) pressed.delete(p.pitch);
-    if (p.panning) return;
+    if (p.panning || p.struck) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     if (y >= canvas.clientHeight - KEY_H) {
       const pitch = kw.pitchAt(x + vx);
-      if (pitch >= 0) strike(pitch);
+      if (pitch >= 0) strike(pitch, performance.now() - p.downAt);
     }
   });
   canvas.addEventListener("pointercancel", (e) => {
     const p = pointers.get(e.pointerId);
-    if (p && p.pitch >= 0) pressed.delete(p.pitch);
+    if (p) {
+      clearTimeout(p.graceTimer);
+      if (p.pitch >= 0) pressed.delete(p.pitch);
+    }
     pointers.delete(e.pointerId);
   });
 
@@ -426,6 +454,19 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       g.fill();
     }
 
+    /* a held judged key keeps a gentle sparkle going until release */
+    if (heldSpark) {
+      if (!pressed.has(heldSpark.pitch)) {
+        heldSpark = null;
+      } else {
+        const nowT = performance.now();
+        if (nowT - heldSpark.lastEmit >= HELD_SPARK_MS) {
+          heldSpark.lastEmit = nowT;
+          spawnSparks(heldSpark.pitch, heldSpark.grade, 3);
+        }
+      }
+    }
+
     /* pan hint arrows when the board extends past an edge */
     g.fillStyle = "#8A90A2";
     g.font = "12px sans-serif";
@@ -454,9 +495,22 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       if (ni < 0) return;
       loP = hiP = scoring.notePitch(ni);
     }
+    // Stay still while the cluster sits comfortably inside the board; glide
+    // early, with a time-based ease and a speed cap, instead of jumping.
+    const margin = 24;
+    if (kw.leftPx(loP) - vx >= margin && kw.rightPx(hiP) - vx <= canvas.clientWidth - margin) return;
     const target = kw.viewportCentering(Math.max(lo, loP - 2), Math.min(hi, hiP + 2));
-    vx += (target - vx) * 0.12;
+    const diff = target - vx;
+    if (Math.abs(diff) < 1) { vx = target; return; }
+    const t = performance.now();
+    const dt = Math.min(0.1, lastFollowT ? (t - lastFollowT) / 1000 : 0.016);
+    lastFollowT = t;
+    let step = diff * 4 * dt;
+    const cap = canvas.clientWidth * 1.5 * dt;
+    step = Math.max(-cap, Math.min(cap, step));
+    vx = Math.abs(step) >= Math.abs(diff) ? target : vx + step;
   }
+  let lastFollowT = 0;
 
   function frame() {
     if (ended) return;
