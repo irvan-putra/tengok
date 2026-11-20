@@ -96,7 +96,8 @@ function showSampleLink(entry) {
   if (entry && entry.sampleId) {
     const url = location.origin + location.pathname + "?sample=" + entry.sampleId;
     history.replaceState(null, "", "?sample=" + entry.sampleId);
-    linkLine.textContent = "Link to this view: " + url;
+    /* the URL gets its own line so it wraps at the real edge, never mid-token */
+    linkLine.replaceChildren("Link to this view: ", V.el("span", "view-link-url", url));
   } else {
     history.replaceState(null, "", location.pathname);
     linkLine.textContent = "Local file: no link to copy. It stays on this device and is never uploaded.";

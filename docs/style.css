@@ -211,7 +211,11 @@ footer a { color: #3E6FB0; }
   padding: 0 16px;
   font-size: 13px;
   user-select: text;
-  word-break: break-all;
+  overflow-wrap: break-word;
+}
+.view-link-url {
+  display: block;
+  overflow-wrap: break-word;
 }
 .sample-item {
   display: flex;
