@@ -94,7 +94,18 @@ public class ViewerActivity extends Activity {
 
     private void render() {
         try {
+            if (BuildConfig.DEBUG && getIntent().getBooleanExtra("fail_open_grant", false)) {
+                throw new SecurityException("simulated lost grant");
+            }
             head = source.head(8192);
+        } catch (SecurityException e) {
+            // The read grant is gone: Android's per-app persisted-grant budget
+            // was full when the file was first opened (so nothing persisted),
+            // or the provider revoked it. Fail safe, never crash, and point at
+            // the only fix - picking the file again. No hex fallback: every
+            // further read of this Uri would fail the same way.
+            showAccessLost(e);
+            return;
         } catch (IOException e) {
             showError("tengok couldn't open this file", "open", e);
             return;
@@ -162,6 +173,22 @@ public class ViewerActivity extends Activity {
         } catch (IOException e) {
             showError("tengok couldn't read this file", "read", e);
         }
+    }
+
+    private void showAccessLost(SecurityException e) {
+        DiagLog.log(this, "ERR view op=open ex=" + e.getClass().getName());
+        LinearLayout column = Ui.column(this);
+        LinearLayout card = Ui.card(this);
+        card.addView(Ui.line(this, "tengok no longer has access to this file"));
+        card.addView(Ui.muted(this,
+                "Android forgot the read access tengok was granted. "
+                + "Pick the file again from the home screen to keep viewing it. "
+                + "The file itself is exactly where it was."));
+        column.addView(card);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(column);
+        content.removeAllViews();
+        content.addView(scroll);
     }
 
     private void showError(String headline, String op, Throwable cause) {

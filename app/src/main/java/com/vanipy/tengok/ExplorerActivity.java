@@ -133,10 +133,21 @@ public class ExplorerActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQ_TREE && resultCode == RESULT_OK && data != null && data.getData() != null) {
             Uri picked = data.getData();
-            getContentResolver().takePersistableUriPermission(
-                    picked, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            boolean persisted = true;
+            try {
+                getContentResolver().takePersistableUriPermission(
+                        picked, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (RuntimeException e) {
+                // grant budget full: the folder stays browsable for this
+                // session; it is not remembered, since the saved Uri would
+                // be dead on the next launch
+                persisted = false;
+                DiagLog.log(this, "ERR tree op=persist ex=" + e.getClass().getName());
+            }
             tree = picked;
-            prefs().edit().putString("explorer_tree", picked.toString()).apply();
+            if (persisted) {
+                prefs().edit().putString("explorer_tree", picked.toString()).apply();
+            }
             docStack.clear();
             nameStack.clear();
             docStack.add(DocumentsContract.buildDocumentUriUsingTree(

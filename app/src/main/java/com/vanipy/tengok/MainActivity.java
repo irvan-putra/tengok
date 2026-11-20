@@ -306,10 +306,22 @@ public class MainActivity extends Activity {
             openViewer(data.getData(), data.getType());
         } else if (requestCode == REQ_TREE && resultCode == RESULT_OK && data != null && data.getData() != null) {
             Uri tree = data.getData();
-            getContentResolver().takePersistableUriPermission(
-                    tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            getSharedPreferences("tengok", MODE_PRIVATE).edit()
-                    .putString("explorer_tree", tree.toString()).apply();
+            boolean persisted = true;
+            try {
+                getContentResolver().takePersistableUriPermission(
+                        tree, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (RuntimeException e) {
+                // Android caps how many persisted grants an app can hold. If
+                // that budget is full, keep browsing with this session's grant
+                // instead of crashing, and don't remember the folder - the
+                // saved Uri would be dead on the next launch.
+                persisted = false;
+                DiagLog.log(this, "ERR tree op=persist ex=" + e.getClass().getName());
+            }
+            if (persisted) {
+                getSharedPreferences("tengok", MODE_PRIVATE).edit()
+                        .putString("explorer_tree", tree.toString()).apply();
+            }
             startActivity(new Intent(this, ExplorerActivity.class));
         } else if (requestCode == REQ_OPEN) {
             Toast.makeText(this, "No file chosen", Toast.LENGTH_SHORT).show();
@@ -322,6 +334,8 @@ public class MainActivity extends Activity {
         if (BuildConfig.DEBUG) {
             view.putExtra("fail_details_hash",
                     getIntent().getBooleanExtra("fail_details_hash", false));
+            view.putExtra("fail_open_grant",
+                    getIntent().getBooleanExtra("fail_open_grant", false));
         }
         startActivity(view);
     }

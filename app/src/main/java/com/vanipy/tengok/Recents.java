@@ -111,8 +111,13 @@ public final class Recents {
 
     /**
      * Remembers a just-opened file. Best-effort: a persistable grant is taken
-     * when the provider allows it (the system picker does); files reached
-     * through a picked folder reopen through the folder's tree grant instead.
+     * when the provider allows it (the system picker does) and Android's
+     * per-app persisted-grant budget still has room. Persisted grants are
+     * never released by tengok, so they can accumulate across many opens;
+     * when the budget runs out the grant simply is not persisted and the
+     * file still opens for that session - only a later reopen from this
+     * list would need a fresh pick. Files reached through a picked folder
+     * reopen through the folder's tree grant instead.
      */
     public static void record(Context ctx, Uri uri, String name) {
         if (uri == null || !"content".equals(uri.getScheme())) return;
@@ -134,8 +139,7 @@ public final class Recents {
      * touched, and read access Android already granted (a per-document
      * persisted grant or a folder's tree grant) is deliberately kept, so the
      * list can be pruned without ever costing the user access they once
-     * approved. Persisted grants stay well under Android's per-app cap at
-     * this list's size.
+     * approved.
      */
     public static void remove(Context ctx, String uri) {
         SharedPreferences p = prefs(ctx);

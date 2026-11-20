@@ -843,6 +843,38 @@ shot("13i-explorer-grant-intact")
 back()
 time.sleep(1)
 
+# ---- a lost read grant must fail safe, never crash ----
+# If Android's per-app persisted-grant budget was full when a file was first
+# opened, nothing persisted; reopening that entry later must show the
+# access-lost card with a re-pick instruction, keep the app alive, and NOT
+# offer the hex fallback (every read of that Uri would fail the same way).
+adb("shell", "am", "force-stop", PKG)
+time.sleep(1)
+rr = adb("shell", "am", "start",
+         "-a", "android.intent.action.VIEW",
+         "-n", f"{PKG}/.MainActivity",
+         "-t", "audio/midi",
+         "--ez", "fail_open_grant", "true",
+         "-d", f"content://{PKG}.fixtureprovider/smoke.mid")
+print("am start viewer fail_open_grant:", rr.stdout.decode("utf-8", "replace").strip(),
+      rr.stderr.decode("utf-8", "replace").strip())
+time.sleep(2.5)
+need("tengok no longer has access to this file")
+need("Pick the file again from the home screen")
+if present("Show as hex instead"):
+    shot("FAILED-access-lost-hex")
+    print("hex fallback offered on a lost grant; it would fail the same way")
+    sys.exit(1)
+shot("13j-access-lost")
+back()
+time.sleep(1)
+need("Open a file")  # home renders fine after the failure
+log = adb("shell", "run-as", PKG, "cat", "files/diag.log").stdout.decode("utf-8", "replace")
+if "ERR view op=open ex=java.lang.SecurityException" not in log:
+    print("EXPECTED IN diag.log: ERR view op=open ex=java.lang.SecurityException")
+    print(log[-2000:])
+    sys.exit(1)
+
 # ---- launcher icon ----
 adb("shell", "input", "keyevent", "3")
 time.sleep(2)
