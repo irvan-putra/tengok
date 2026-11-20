@@ -441,11 +441,12 @@ need("miss 0")  # the skips landed on their runways without costing a note
 need("accuracy 100%")
 shot("05f-midi-game-done")
 # a done round restarts deliberately on play
+adb("shell", "logcat", "-c")
 tap("play", exact=True)
 restarted = False
 for _ in range(20):
     out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
-    if len(re.findall(r"TENGOK-GAME-READY", out)) >= 2:
+    if re.search(r"TENGOK-GAME-READY", out):
         restarted = True
         break
     time.sleep(0.5)
