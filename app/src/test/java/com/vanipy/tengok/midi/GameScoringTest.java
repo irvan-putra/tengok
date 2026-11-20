@@ -45,7 +45,7 @@ public class GameScoringTest {
         GameScoring s = new GameScoring(song(12.0, 13.0, 30.0), 1);
         s.strike(60, 12000); // perfect on the first
         assertEquals(1, s.nextPendingIndex());
-        s.tick(13221); // second note's good window closes -> miss
+        s.tick(13401); // second note's late window closes -> miss
         assertEquals(2, s.nextPendingIndex());
         s.strike(60, 30000);
         assertEquals(-1, s.nextPendingIndex());
@@ -89,11 +89,11 @@ public class GameScoringTest {
         GameScoring s = new GameScoring(song(12.0, 13.0, 14.0, 15.0), 1);
         s.strike(60, 12000); // perfect: 100% + streak 1
         assertEquals("SSS", s.rankLive());
-        s.tick(13221); // the 13 s note's window closes: accuracy halves, streak resets
+        s.tick(13401); // the 13 s note's window closes: accuracy halves, streak resets
         assertEquals("C", s.rankLive());
         s.strike(60, 14000); // perfect: 66% + streak 1
         assertEquals("B", s.rankLive());
-        s.tick(15221); // the last note slips: 50% + best-streak-1 bonus
+        s.tick(15401); // the last note slips: 50% + best-streak-1 bonus
         assertEquals("C", s.rankFinal());
     }
 
@@ -111,5 +111,48 @@ public class GameScoringTest {
         m.notes.add(broken);
         GameScoring t = new GameScoring(m, 1);
         assertEquals(1, t.badTimeCount());
+    }
+
+    @Test
+    public void lateTapWithinTheWidenedWindowStillScores() {
+        GameScoring s = new GameScoring(song(12.0), 1);
+        assertEquals(GameScoring.GOOD, s.strike(60, 12000 + 350)); // late, human
+    }
+
+    @Test
+    public void lateTapAtTheWindowEdgeStillScores() {
+        GameScoring s = new GameScoring(song(12.0), 1);
+        assertEquals(GameScoring.GOOD, s.strike(60, 12000 + GameScoring.GOOD_LATE_MS));
+    }
+
+    @Test
+    public void tapPastTheLateWindowFindsNoNote() {
+        GameScoring s = new GameScoring(song(12.0), 1);
+        assertEquals(GameScoring.PENDING, s.strike(60, 12000 + GameScoring.GOOD_LATE_MS + 1));
+    }
+
+    @Test
+    public void earlyTapUsesTheTighterEarlyWindow() {
+        GameScoring s = new GameScoring(song(12.0), 1);
+        assertEquals(GameScoring.GOOD, s.strike(60, 12000 - GameScoring.GOOD_EARLY_MS));
+        GameScoring s2 = new GameScoring(song(12.0), 1);
+        assertEquals(GameScoring.PENDING, s2.strike(60, 12000 - GameScoring.GOOD_EARLY_MS - 50));
+    }
+
+    @Test
+    public void perfectWindowIsUnchangedAndSymmetric() {
+        GameScoring s = new GameScoring(song(12.0), 1);
+        assertEquals(GameScoring.PERFECT, s.strike(60, 12000 + GameScoring.PERFECT_MS));
+        GameScoring s2 = new GameScoring(song(12.0), 1);
+        assertEquals(GameScoring.PERFECT, s2.strike(60, 12000 - GameScoring.PERFECT_MS));
+    }
+
+    @Test
+    public void missClosesOnlyAfterTheLateWindow() {
+        GameScoring s = new GameScoring(song(12.0), 1);
+        s.tick(12000 + GameScoring.GOOD_LATE_MS);
+        assertEquals(0, s.miss()); // still hittable while the bar is leaving
+        s.tick(12000 + GameScoring.GOOD_LATE_MS + 1);
+        assertEquals(1, s.miss());
     }
 }

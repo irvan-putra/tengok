@@ -67,6 +67,13 @@ public final class GameView extends View {
     private float lastX;
     private float maxDx;
     private boolean panning;
+    /** Key under the finger right now: the visible "your tap registered". */
+    private int pressedPitch = -1;
+    /** Last judged strike, flashed briefly on its key in the grade's color. */
+    private int flashPitch = -1;
+    private int flashGrade = 0;
+    private long flashUntilMs = 0;
+    private static final long FLASH_MS = 350;
     private int candidatePitch = -1;
     private long downEventMs;
     private final int touchSlop;
@@ -312,7 +319,29 @@ public final class GameView extends View {
             canvas.drawRect(kr, paint);
         }
 
-        // judged-note feedback: brief tint over the key area is handled by alpha notes;
+        // input feedback: the key under the finger dims while held; a judged
+        // strike flashes its key green (Perfect), amber (Good) or grey
+        // (registered, but no pending note there), fading over FLASH_MS.
+        long nowUp = SystemClock.uptimeMillis();
+        for (int p = loPitch; p <= hiPitch; p++) {
+            RectF kr = keyRect(p);
+            if (kr.right < 0 || kr.left > w) continue;
+            boolean black = KeyWindow.isBlack(p);
+            if (p == pressedPitch) {
+                paint.setColor(black ? 0x66FFFFFF : 0x33000000);
+                canvas.drawRect(kr, paint);
+            }
+            if (p == flashPitch && nowUp < flashUntilMs) {
+                int base;
+                if (flashGrade == GameScoring.PERFECT) base = 0xFF3DA35D;
+                else if (flashGrade == GameScoring.GOOD) base = 0xFFFFB300;
+                else base = 0xFF8A90A2;
+                int a = (int) (110 * (flashUntilMs - nowUp) / (float) FLASH_MS);
+                paint.setColor((a << 24) | (base & 0x00FFFFFF));
+                canvas.drawRect(kr, paint);
+                postInvalidateDelayed(30); // keep the fade animating
+            }
+        }
         // scoring readout lives in the panel text under this view.
 
         int[] loc = new int[2];
@@ -361,6 +390,10 @@ public final class GameView extends View {
                     if (gapHintSec > 0 && skipListener != null) skipListener.onSkip();
                 } else {
                     candidatePitch = pitchAt(x, y);
+                    if (candidatePitch >= 0) {
+                        pressedPitch = candidatePitch; // immediate "registered"
+                        invalidate();
+                    }
                     // A real finger rolls a little vertically during a tap. Do
                     // not let a scrolling parent steal the stream mid-tap and
                     // turn it into a CANCEL - the keyboard owns this touch.
@@ -372,6 +405,7 @@ public final class GameView extends View {
             case MotionEvent.ACTION_MOVE: {
                 if (Math.abs(e.getY() - downY) > touchSlop * 3) {
                     candidatePitch = -1; // a deliberate vertical drag is not a tap
+                    if (pressedPitch >= 0) { pressedPitch = -1; invalidate(); }
                 }
                 KeyWindow kw = keyWindow();
                 if (kw.maxViewport() <= 0) return true;
@@ -398,15 +432,28 @@ public final class GameView extends View {
                     strike(candidatePitch, e.getEventTime() - downEventMs);
                 }
                 candidatePitch = -1;
+                pressedPitch = -1;
                 panning = false;
+                invalidate();
                 return true;
             case MotionEvent.ACTION_CANCEL:
                 candidatePitch = -1;
+                pressedPitch = -1;
                 panning = false;
+                invalidate();
                 return true;
             default:
                 return true;
         }
+    }
+
+    /** The controller judged a strike: flash the key in the grade's color.
+     *  grade PENDING means the tap registered but matched no pending note. */
+    public void showStrikeGrade(int pitch, int grade) {
+        flashPitch = pitch;
+        flashGrade = grade;
+        flashUntilMs = SystemClock.uptimeMillis() + FLASH_MS;
+        invalidate();
     }
 
     private void strike(int pitch, long delayMs) {
