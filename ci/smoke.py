@@ -6,7 +6,7 @@ hex, painted image), playback with an advancing position, the details sheet,
 the SAF picker opening, and a real VIEW intent carrying an independently
 generated MIDI file.
 """
-import re, subprocess, sys, time
+import os, re, subprocess, sys, time
 import xml.etree.ElementTree as ET
 
 PKG = "com.vanipy.tengok"
@@ -109,6 +109,11 @@ def logcat_has(marker):
     out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
     return marker in out
 
+
+# published-APK proof runs the real user path instead of the debug fixtures
+if os.environ.get("RELEASE_TAG"):
+    _here = os.path.dirname(os.path.abspath(__file__))
+    exec(open(os.path.join(_here, "smoke_release.py")).read(), globals())
 
 adb("shell", "logcat", "-c")
 adb("shell", "pm", "clear", PKG)

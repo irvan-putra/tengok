@@ -7,12 +7,18 @@ if [ -n "${RELEASE_TAG:-}" ]; then
   gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir /tmp/rel --pattern '*.apk' --pattern '*.sha256'
   (cd /tmp/rel && sha256sum -c ./*.sha256)
   adb install -r /tmp/rel/tengok-v*.apk
-else
-  VER=$(sed -n 's/^val appVersionName = "\(.*\)"/\1/p' app/build.gradle.kts)
-  APK="app/build/outputs/apk/debug/tengok-v${VER}-debug.apk"
-  test -f "$APK"
-  adb install -r "$APK"
+  # release bytes carry no debug fixture screen and run-as needs a debuggable
+  # package: deliver the late-entrance fixture as a real user file instead
+  python3 ci/make_latepad.py /tmp/latepad.mid
+  adb shell mkdir -p /sdcard/Download/tengok-fixtures
+  adb push /tmp/latepad.mid /sdcard/Download/tengok-fixtures/latepad.mid
+  python3 ci/smoke.py
+  exit 0
 fi
+VER=$(sed -n 's/^val appVersionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+APK="app/build/outputs/apk/debug/tengok-v${VER}-debug.apk"
+test -f "$APK"
+adb install -r "$APK"
 # independent fixture: a MIDI file this repo's Python writes, delivered through a real VIEW intent
 python3 ci/make_midi.py /tmp/smoke.mid
 adb push /tmp/smoke.mid /data/local/tmp/smoke.mid
