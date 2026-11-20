@@ -304,26 +304,46 @@ if pitch is None or pitch not in keymap:
     print("game never waited for the first note, pitch:", pitch)
     sys.exit(1)
 keymap = pan_vs_strike_proof(pitch, keymap, "FAILED-midi-game-pan")
+# Physical-phone report (0.3.2): taps almost never struck. A real finger
+# rolls a little, vertically and sideways; a scrolling parent can steal a
+# rolling tap (ACTION_CANCEL) and a sideways wobble was eaten as a pan. The
+# scoring tap must therefore arrive through real imperfect input. In wait
+# mode the clock is frozen, so gesture length cannot tax the grade.
+GESTURES = [
+    ("jittery tap (40px vertical roll)",
+     lambda x, y: adb("shell", "input", "swipe", str(x), str(y), str(x + 2), str(y + 40), "120")),
+    ("wobbly tap (30px horizontal)",
+     lambda x, y: adb("shell", "input", "swipe", str(x), str(y), str(x + 30), str(y + 3), "120")),
+    ("stationary tap",
+     lambda x, y: adb("shell", "input", "tap", str(x), str(y))),
+]
 scored = False
-for attempt in range(2):
+for label, gesture in GESTURES:
     x, y = keymap[pitch]
-    adb("shell", "input", "tap", str(x), str(y))
+    adb("shell", "logcat", "-c")
+    gesture(x, y)
     time.sleep(1.2)
     out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    taps = re.findall(r"TENGOK-GAME-TAP pitch=(\d+)", out)
+    if not any(int(p_) == pitch for p_ in taps):
+        shot("FAILED-midi-game-tap")
+        print(label, "never reached the view as a tap on pitch", pitch,
+              "- physical-phone tap regression. taps seen:", taps)
+        sys.exit(1)
     strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
     if any(int(p_) == pitch and int(g) in (1, 2) for p_, g in strikes):
         scored = True
+        print(label, "struck and scored:", strikes)
         break
     km = keymap_from(out)  # fresh geometry may have landed after the wait began
     if km:
         keymap = km
 if not scored:
-    taps = re.findall(r"TENGOK-GAME-TAP pitch=(\d+)", out)
     shot("FAILED-midi-game")
-    print("tap on the waiting key did not score: pitch", pitch,
-          "tapped", (x, y), "view taps seen:", taps, "strikes:", strikes)
+    print("no gesture scored on the waiting key: pitch", pitch, "strikes:", strikes)
     sys.exit(1)
-print("game strike scored on the frozen note:", strikes)
+time.sleep(3)  # outlast any manual pan hold; follow re-centers the next note
+keymap = keymap_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")) or keymap
 need("perfect 1")
 need("rank SSS")  # 100% accuracy plus the streak, live in the score line
 shot("05c-midi-game")
