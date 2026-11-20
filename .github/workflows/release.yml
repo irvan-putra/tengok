@@ -71,7 +71,7 @@ jobs:
           "$BT/aapt" dump badging "$APK" | grep -F "package: name='com.vanipy.tengok'"
           "$BT/aapt" dump badging "$APK" | grep -F "versionName='${VER}'"
           if "$BT/apksigner" verify --print-certs "$APK" | grep -q 'DEBUG'; then exit 1; fi
-          if "$BT/aapt" dump permissions "$APK" | grep -q 'uses-permission'; then exit 1; fi
+          ci/check_permissions.sh "$BT/aapt" "$APK"
           cp "$APK" "tengok-v${VER}.apk"
           sha256sum "tengok-v${VER}.apk" | tee "tengok-v${VER}.apk.sha256"
       - name: Upload candidate APK for the byte check
