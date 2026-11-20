@@ -24,8 +24,10 @@ import java.util.Random;
  * Keys keep a finger-sized minimum width (KeyWindow.MIN_WHITE_DP). When the
  * song's range is wider than the screen, the board pans: it follows the next
  * notes by itself, and a sideways drag on the keys looks around without
- * striking. A tap still strikes at the instant the finger lands - the press
- * time is carried through the tap check, so panning never costs timing.
+ * striking. A press strikes as soon as it is clearly not a drag (a short
+ * grace, or release - whichever comes first) and the press time is carried
+ * through either way, so judgment and sparks land during a hold, and
+ * panning never costs timing.
  */
 public final class GameView extends View {
     private static final String TAG = "tengok";
@@ -38,6 +40,18 @@ public final class GameView extends View {
     private static final double FOLLOW_WINDOW_MS = 1500;
     /** A manual drag holds the board still for this long before follow resumes. */
     private static final long MANUAL_HOLD_MS = 2500;
+    /** A press held this long without turning into a pan strikes in place, so
+     *  the judgment and sparks land while the finger is still down. A drag
+     *  that passes the pan slop first cancels the pending strike, so a real
+     *  look-around drag still never strikes. */
+    private static final long STRIKE_GRACE_MS = 90;
+    /** While a judged hit's key stays held, fresh sparks re-emit at this pace. */
+    private static final long HELD_SPARK_MS = 110;
+    /** Follow glide: ease rate per second, capped at this many screens/second. */
+    private static final float FOLLOW_RATE = 4f;
+    private static final float FOLLOW_MAX_SCREENS_PER_SEC = 1.5f;
+    /** Keep this much slack at the board edges and start gliding early. */
+    private static final float FOLLOW_MARGIN_DP = 18f;
 
     public interface StrikeListener {
         /** delayMs is how long ago the finger landed (0 for a MIDI key). */
@@ -70,6 +84,13 @@ public final class GameView extends View {
     private boolean panning;
     /** Key under the finger right now: the visible "your tap registered". */
     private int pressedPitch = -1;
+    private final Runnable strikeGrace = this::strikeGraceNow;
+    private boolean struckThisGesture;
+    /** Judged hit whose key is still held: sparks keep coming until release. */
+    private int heldSparkPitch = -1;
+    private int heldSparkColor;
+    private long lastHeldSparkMs;
+    private long lastFollowTickMs;
     /** Last judged strike, flashed briefly on its key in the grade's color. */
     private int flashPitch = -1;
     private int flashGrade = 0;
@@ -186,10 +207,25 @@ public final class GameView extends View {
             if (n.pitch > hi) hi = n.pitch;
         }
         if (lo > hi) return;
-        if (kw.rangeVisible(lo, hi, viewportX)) return;
+        float margin = getResources().getDisplayMetrics().density * FOLLOW_MARGIN_DP;
+        if (!snap && kw.leftPx(lo) - viewportX >= margin
+                && kw.rightPx(hi) - viewportX <= getWidth() - margin) return;
         float target = kw.viewportCentering(lo, hi);
         float diff = target - viewportX;
-        viewportX = (snap || Math.abs(diff) < 1f) ? target : viewportX + diff * 0.25f;
+        if (snap || Math.abs(diff) < 1f) {
+            viewportX = target;
+            return;
+        }
+        // Time-based glide with a speed cap: the board drifts to the next
+        // cluster instead of jumping, however far away that cluster sits.
+        long tick = SystemClock.uptimeMillis();
+        float dt = lastFollowTickMs == 0 ? 0.033f
+                : Math.min(0.1f, (tick - lastFollowTickMs) / 1000f);
+        lastFollowTickMs = tick;
+        float step = diff * FOLLOW_RATE * dt;
+        float cap = getWidth() * FOLLOW_MAX_SCREENS_PER_SEC * dt;
+        if (step > cap) step = cap; else if (step < -cap) step = -cap;
+        viewportX = Math.abs(step) >= Math.abs(diff) ? target : viewportX + step;
     }
 
     /** Keyboard strip height, always derived from the current laid-out height. */
@@ -370,6 +406,18 @@ public final class GameView extends View {
             }
             if (!sparks.isEmpty()) postInvalidateDelayed(30);
         }
+        // a held judged key keeps a gentle sparkle going until release
+        if (heldSparkPitch >= 0) {
+            if (pressedPitch != heldSparkPitch) {
+                heldSparkPitch = -1;
+            } else {
+                if (nowUp - lastHeldSparkMs >= HELD_SPARK_MS) {
+                    lastHeldSparkMs = nowUp;
+                    spawnSparks(heldSparkPitch, heldSparkColor, 3);
+                }
+                postInvalidateDelayed(30);
+            }
+        }
         // scoring readout lives in the panel text under this view.
 
         int[] loc = new int[2];
@@ -413,6 +461,7 @@ public final class GameView extends View {
                 panning = false;
                 downEventMs = e.getEventTime();
                 candidatePitch = -1;
+                struckThisGesture = false;
                 if (y < getHeight() - keyboardH()) {
                     // the lane itself: only meaningful while a skip is on offer
                     if (gapHintSec > 0 && skipListener != null) skipListener.onSkip();
@@ -420,6 +469,7 @@ public final class GameView extends View {
                     candidatePitch = pitchAt(x, y);
                     if (candidatePitch >= 0) {
                         pressedPitch = candidatePitch; // immediate "registered"
+                        postDelayed(strikeGrace, STRIKE_GRACE_MS);
                         invalidate();
                     }
                     // A real finger rolls a little vertically during a tap. Do
@@ -441,6 +491,7 @@ public final class GameView extends View {
                 maxDx = Math.max(maxDx, Math.abs(x - downX));
                 if (!panning && maxDx > touchSlop) {
                     panning = true; // a drag pans; the candidate survives small wobble
+                    removeCallbacks(strikeGrace); // but a real drag never strikes
                 }
                 if (panning) {
                     viewportX = kw.clampViewport(viewportX - (x - lastX));
@@ -454,19 +505,23 @@ public final class GameView extends View {
                 // A real tap wobbles. Forgive a quick gesture whose finger
                 // never strayed far: still the strike the user meant. A true
                 // look-around drag (sustained displacement) never strikes.
-                if (candidatePitch >= 0
+                removeCallbacks(strikeGrace);
+                if (!struckThisGesture && candidatePitch >= 0
                         && (!panning || (maxDx < touchSlop * 2.5f
                                 && e.getEventTime() - downEventMs < 300))) {
                     strike(candidatePitch, e.getEventTime() - downEventMs);
                 }
                 candidatePitch = -1;
                 pressedPitch = -1;
+                heldSparkPitch = -1;
                 panning = false;
                 invalidate();
                 return true;
             case MotionEvent.ACTION_CANCEL:
+                removeCallbacks(strikeGrace);
                 candidatePitch = -1;
                 pressedPitch = -1;
+                heldSparkPitch = -1;
                 panning = false;
                 invalidate();
                 return true;
@@ -482,18 +537,26 @@ public final class GameView extends View {
         flashGrade = grade;
         flashUntilMs = SystemClock.uptimeMillis() + FLASH_MS;
         if (grade == GameScoring.PERFECT || grade == GameScoring.GOOD) {
-            spawnSparks(pitch, grade == GameScoring.PERFECT ? 0xFFFFD84D : 0xFF9BE15D);
+            int color = grade == GameScoring.PERFECT ? 0xFFFFD84D : 0xFF9BE15D;
+            spawnSparks(pitch, color, SPARKS_PER_HIT);
+            if (pressedPitch == pitch) {
+                // still held: keep sparkling until the finger lifts
+                heldSparkPitch = pitch;
+                heldSparkColor = color;
+                lastHeldSparkMs = SystemClock.uptimeMillis();
+                postInvalidateDelayed(30);
+            }
         }
         invalidate();
     }
 
-    private void spawnSparks(int pitch, int color) {
+    private void spawnSparks(int pitch, int color, int count) {
         RectF kr = keyRect(pitch);
         float cx = kr.centerX();
         float cy = kr.top - 8; // clear of the hit line and the finger
         float d = getResources().getDisplayMetrics().density;
         long born = SystemClock.uptimeMillis();
-        for (int i = 0; i < SPARKS_PER_HIT; i++) {
+        for (int i = 0; i < count; i++) {
             double a = Math.toRadians(-165 + sparkRng.nextFloat() * 150); // upward fan
             float v = (0.22f + sparkRng.nextFloat() * 0.38f) * d;
             sparks.add(new float[]{cx, cy,
@@ -501,6 +564,14 @@ public final class GameView extends View {
         }
         while (sparks.size() > SPARK_MAX) sparks.remove(0);
         postInvalidateDelayed(30);
+    }
+
+    /** Grace elapsed with the finger still down and no pan: strike now, so a
+     *  held key judges and sparks during the hold, not only at release. */
+    private void strikeGraceNow() {
+        if (struckThisGesture || panning || candidatePitch < 0) return;
+        struckThisGesture = true;
+        strike(candidatePitch, SystemClock.uptimeMillis() - downEventMs);
     }
 
     private void strike(int pitch, long delayMs) {
