@@ -213,3 +213,16 @@ footer a { color: #3E6FB0; }
   user-select: text;
   word-break: break-all;
 }
+.sample-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.sample-url {
+  font-size: 11px;
+  color: #5B6172;
+  user-select: text;
+  word-break: break-all;
+  max-width: 200px;
+}

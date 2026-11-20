@@ -196,10 +196,16 @@ function loadSample(name) {
 
 function wire() {
   const samples = document.getElementById("samples");
-  for (const [, file, label] of SAMPLES) {
+  for (const [sid, file, label] of SAMPLES) {
+    /* Each picker shows its own deep link as selectable text, so the URL is
+     * available on the page without opening the view first. */
+    const item = V.el("span", "sample-item");
     const b = V.el("button", "btn", label);
     b.addEventListener("click", () => loadSample(file));
-    samples.appendChild(b);
+    item.appendChild(b);
+    item.appendChild(V.el("span", "sample-url",
+        location.origin + location.pathname + "?sample=" + sid));
+    samples.appendChild(item);
   }
 
   const picker = document.getElementById("picker");
