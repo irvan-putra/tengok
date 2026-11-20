@@ -214,11 +214,13 @@ public final class GameView extends View {
         }
         if (lo > hi) { tweenStartMs = 0; return; }
         float margin = getResources().getDisplayMetrics().density * FOLLOW_MARGIN_DP;
-        if (!snap && kw.leftPx(lo) - viewportX >= margin
+        if (!snap && tweenStartMs == 0
+                && kw.leftPx(lo) - viewportX >= margin
                 && kw.rightPx(hi) - viewportX <= getWidth() - margin) {
-            // cluster comfortable: stop here; a frozen tween must not resume
-            // with a stale clock later, or the board would snap to its end
-            tweenStartMs = 0;
+            // Cluster comfortable and no sweep in flight: stay still. A
+            // running sweep is NOT frozen here: it keeps gliding to its
+            // target so it eases out at the center instead of cutting to a
+            // dead stop at the margin.
             return;
         }
         float target = kw.viewportCentering(lo, hi);
@@ -252,6 +254,7 @@ public final class GameView extends View {
         float t = Math.min(1f, (tick - tweenStartMs) / (float) tweenDurMs);
         float e = t * t * (3f - 2f * t);
         viewportX = tweenFrom + (tweenDest - tweenFrom) * e;
+        if (t >= 1f) tweenStartMs = 0; // sweep complete: idle until retriggered
     }
 
     /** Keyboard strip height, always derived from the current laid-out height. */
