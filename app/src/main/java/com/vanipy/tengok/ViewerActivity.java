@@ -47,6 +47,7 @@ public class ViewerActivity extends Activity {
         }
         source = uri != null ? Source.forUri(this, uri) : new Source.FileSource(new File(fixturePath));
         DiagLog.watch(source.name);
+        if (uri != null) Recents.record(this, uri, source.name);
 
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);

@@ -1,17 +1,21 @@
 package com.vanipy.tengok;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.List;
 
 /**
  * Home screen and the front door: files arrive from the system picker, from
@@ -50,6 +54,14 @@ public class MainActivity extends Activity {
     }
 
     private boolean showingAbout;
+    private boolean homeVisible;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // reopen count and list order change while a file is open; refresh on return
+        if (homeVisible && !showingAbout) showHome();
+    }
 
     @Override
     public void onBackPressed() {
@@ -62,6 +74,7 @@ public class MainActivity extends Activity {
 
     private void showHome() {
         showingAbout = false;
+        homeVisible = true;
         LinearLayout column = Ui.column(this);
         column.setGravity(Gravity.CENTER_HORIZONTAL);
         column.setPadding(Ui.dp(this, 24), Ui.dp(this, 48), Ui.dp(this, 24), Ui.dp(this, 24));
@@ -136,6 +149,42 @@ public class MainActivity extends Activity {
         browseLp.setMargins(0, Ui.dp(this, 12), 0, 0);
         column.addView(browse, browseLp);
 
+        List<Recents.Entry> recents = Recents.list(this);
+        if (!recents.isEmpty()) {
+            TextView head = new TextView(this);
+            head.setText("Recent files");
+            head.setTextSize(17);
+            head.setTypeface(Typeface.DEFAULT_BOLD);
+            head.setTextColor(0xFF1B2340);
+            head.setPadding(0, Ui.dp(this, 24), 0, 0);
+            column.addView(head);
+            for (Recents.Entry e : recents) {
+                LinearLayout card = Ui.card(this);
+                LinearLayout row = Ui.row(this);
+                TextView name = Ui.line(this, e.name);
+                name.setMaxLines(1);
+                name.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+                row.addView(name, new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                TextView rm = new TextView(this);
+                rm.setText("Remove");
+                rm.setTextSize(14);
+                rm.setTextColor(0xFFB86E00);
+                rm.setPadding(Ui.dp(this, 12), Ui.dp(this, 4), 0, Ui.dp(this, 4));
+                rm.setOnClickListener(v -> confirmRemoveRecent(e));
+                row.addView(rm);
+                card.addView(row);
+                card.setOnClickListener(v -> openViewer(Uri.parse(e.uri), null));
+                column.addView(card);
+            }
+            TextView note = new TextView(this);
+            note.setText("Remove only clears this list - the file itself is never touched.");
+            note.setTextSize(13);
+            note.setTextColor(0xFF8A8FA3);
+            note.setPadding(0, Ui.dp(this, 8), 0, 0);
+            column.addView(note);
+        }
+
         TextView or = new TextView(this);
         or.setText("or tap a file in any app and choose tengok");
         or.setTextSize(14);
@@ -163,8 +212,22 @@ public class MainActivity extends Activity {
         setContentView(scroll);
     }
 
+    private void confirmRemoveRecent(Recents.Entry e) {
+        new AlertDialog.Builder(this)
+                .setTitle("Remove from recent files?")
+                .setMessage("\"" + e.name + "\" stays exactly where it is; "
+                        + "only its entry in this list is cleared. tengok never deletes files.")
+                .setPositiveButton("Remove", (d, w) -> {
+                    Recents.remove(this, e.uri);
+                    showHome();
+                })
+                .setNegativeButton("Keep", null)
+                .show();
+    }
+
     private void showAbout() {
         showingAbout = true;
+        homeVisible = false;
         LinearLayout column = Ui.column(this);
         TextView title = new TextView(this);
         title.setText("What tengok can open");

@@ -260,18 +260,22 @@ public final class GameController {
         waitButton.setText(waitMode ? "wait for me: on" : "wait for me: off");
     }
 
-    private void onStrike(int pitch) {
-        strike(pitch, 100);
+    private void onStrike(int pitch, long delayMs) {
+        strike(pitch, 100, delayMs);
     }
 
     private void onKeyboardKey(int pitch, int velocity) {
-        strike(pitch, velocity);
+        strike(pitch, velocity, 0);
     }
 
-    private void strike(int pitch, int velocity) {
+    private void strike(int pitch, int velocity, long delayMs) {
         if (released || scoring == null) return;
         tones.strike(pitch, velocity);
+        // a screen tap reports when the finger landed, not when it lifted:
+        // judging happens on the landing time so a careful tap is not taxed
+        // for its own length (a frozen wait-mode clock stays at the freeze)
         double now = clockMs();
+        if (!waiting) now = Math.max(0, now - delayMs);
         int grade = scoring.strike(pitch, now);
         Log.i(TAG, "TENGOK-GAME-STRIKE pitch=" + pitch + " grade=" + grade + " ms=" + (int) now);
         if (waiting && waitMode) {
@@ -381,8 +385,9 @@ public final class GameController {
     private void updateScoreLine() {
         if (scoring == null) return;
         scoreLine.setText(String.format(Locale.US,
-                "perfect %d · good %d · miss %d · streak %d",
-                scoring.perfect(), scoring.good(), scoring.miss(), scoring.streak()));
+                "perfect %d · good %d · miss %d · streak %d · rank %s",
+                scoring.perfect(), scoring.good(), scoring.miss(), scoring.streak(),
+                scoring.rankLive()));
     }
 
     private void finishRound() {
@@ -393,10 +398,11 @@ public final class GameController {
         }
         playPause.setText("play");
         scoreLine.setText(String.format(Locale.US,
-                "done! perfect %d · good %d · miss %d · best streak %d · accuracy %d%% · score %d",
+                "done! perfect %d · good %d · miss %d · best streak %d · accuracy %d%% · score %d · rank %s",
                 scoring.perfect(), scoring.good(), scoring.miss(), scoring.bestStreak(),
-                scoring.accuracy(), scoring.score()));
-        Log.i(TAG, "TENGOK-GAME-DONE score=" + scoring.score() + " accuracy=" + scoring.accuracy());
+                scoring.accuracy(), scoring.score(), scoring.rankFinal()));
+        Log.i(TAG, "TENGOK-GAME-DONE score=" + scoring.score() + " accuracy=" + scoring.accuracy()
+                + " rank=" + scoring.rankFinal());
     }
 
     private void exit() {

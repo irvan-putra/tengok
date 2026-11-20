@@ -69,6 +69,16 @@ public final class GameScoring {
         return perfect * 100 + good * 50;
     }
 
+    /** Live show-off rank: accuracy plus the current streak's bonus. */
+    public String rankLive() {
+        return GameRank.rank(accuracy(), streak);
+    }
+
+    /** Final grade: accuracy plus the best streak the round ever held. */
+    public String rankFinal() {
+        return GameRank.rank(accuracy(), bestStreak);
+    }
+
     /** 0..100 percentage of judged notes hit (perfect counts full, good half). */
     public int accuracy() {
         if (judged == 0) return 100;
