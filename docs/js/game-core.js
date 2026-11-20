@@ -29,9 +29,12 @@ const PERFECT_MS = 100;
 /* A tap this far before the note still counts. Early taps are rare. */
 const GOOD_EARLY_MS = 200;
 /* A tap this far after the note still counts - the common human case.
- * The Good window is asymmetric on purpose (same tuning as the Android
- * app): a real fingertip lands late far more often than early, and a
- * note bar stays hittable for most of the time it is visibly leaving. */
+ * The Good reach is asymmetric on purpose (same tuning as the Android
+ * app): a real fingertip lands late far more often than early. A note
+ * stays hittable for as long as its bar is on the hit line: from
+ * GOOD_EARLY_MS before its onset until GOOD_LATE_MS after its END, so a
+ * sustained pad note scores for its whole sustain instead of dying
+ * silently at onset + GOOD_LATE_MS while it still looks playable. */
 const GOOD_LATE_MS = 400;
 const PENDING = 0;
 const PERFECT = 1;
@@ -78,16 +81,17 @@ class GameScoring {
   finished() { return this.judged === this.noteIdx.length; }
 
   /* A key struck at timeMs (song clock). Grades the nearest still-pending
-   * note of this pitch within the Good window, if any. */
+   * note of this pitch whose bar is on the hit line, if any. */
   strike(pitch, timeMs) {
     let best = -1;
-    let bestAbs = GOOD_LATE_MS + 1;
+    let bestAbs = Infinity;
     for (let i = 0; i < this.noteIdx.length; i++) {
       if (this.state[i] !== PENDING) continue;
       const n = this.midi.notes[this.noteIdx[i]];
       if (n.pitch !== pitch) continue;
       const signed = timeMs - n.startSec * 1000.0; // +: late, -: early
-      if (signed < -GOOD_EARLY_MS || signed > GOOD_LATE_MS) continue;
+      if (signed < -GOOD_EARLY_MS) continue; // not reached yet
+      if (timeMs > n.endSec * 1000.0 + GOOD_LATE_MS) continue; // bar gone
       const d = Math.abs(signed);
       if (d < bestAbs) {
         bestAbs = d;
@@ -104,12 +108,12 @@ class GameScoring {
     return grade;
   }
 
-  /* Advances the clock: pending notes whose window closed become misses. */
+  /* Advances the clock: pending notes whose bar has left the line become misses. */
   tick(nowMs) {
     for (let i = 0; i < this.noteIdx.length; i++) {
       if (this.state[i] !== PENDING) continue;
       const n = this.midi.notes[this.noteIdx[i]];
-      if (n.startSec * 1000.0 + GOOD_LATE_MS < nowMs) {
+      if (n.endSec * 1000.0 + GOOD_LATE_MS < nowMs) {
         this.state[i] = MISS;
         this.miss++;
         this.streak = 0;

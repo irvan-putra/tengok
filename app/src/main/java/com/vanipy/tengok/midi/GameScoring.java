@@ -5,12 +5,14 @@ import java.util.List;
 /**
  * Game-mode hit judging. Every note in the player's track is judged on its
  * own clock: a tap (or a MIDI keyboard note-on) within +-PERFECT_MS of the
- * note's start is Perfect, within the Good window is Good, anything outside
- * is a Miss. The Good window is asymmetric on purpose: a real fingertip
- * lands late far more often than early (touch + audio latency is all
- * one-way), so GOOD_LATE_MS is wider than GOOD_EARLY_MS - and a note bar
- * stays hittable for most of the time it is still visibly leaving, instead
- * of dying silently while it looks playable. Because notes are judged
+ * note's start is Perfect; a tap that lands while the note's bar is still
+ * on the hit line - from GOOD_EARLY_MS before the onset until GOOD_LATE_MS
+ * after the note's end - is Good; anything else is a Miss. The Good reach
+ * is asymmetric on purpose: a real fingertip lands late far more often
+ * than early (touch + audio latency is all one-way), so the early side is
+ * tighter - and a sustained pad note stays hittable for its whole
+ * sustain, because its bar sits on the line the whole time and a note
+ * that looks playable must be playable. Because notes are judged
  * independently, a chord rolled slightly late finger by finger - the way
  * people actually play - scores each note on its own merit instead of
  * demanding robotic simultaneity. Velocity from the tap/source is never
@@ -104,18 +106,26 @@ public final class GameScoring {
 
     /**
      * A key was struck at timeMs (song clock). Grades the nearest still
-     * pending note of this pitch within the Good window, if any.
+     * pending note of this pitch, if any. A note stays hittable for as
+     * long as its bar is on the hit line: from GOOD_EARLY_MS before its
+     * onset until GOOD_LATE_MS after its END. Only a strike within
+     * +-PERFECT_MS of the onset is Perfect; everything else that connects
+     * is Good. A pad note sustained for several seconds is exactly the
+     * case this serves - the bar still sits on the line, so the note must
+     * still score, instead of dying silently at onset + GOOD_LATE_MS
+     * while it looks playable.
      * @return PENDING (no matching note), PERFECT or GOOD.
      */
     public int strike(int pitch, double timeMs) {
         int best = -1;
-        double bestAbs = GOOD_LATE_MS + 1;
+        double bestAbs = Double.MAX_VALUE;
         for (int i = 0; i < noteIdx.length; i++) {
             if (state[i] != PENDING) continue;
             MidiFile.Note n = midi.notes.get(noteIdx[i]);
             if (n.pitch != pitch) continue;
             double signed = timeMs - n.startSec * 1000.0; // +: late, -: early
-            if (signed < -GOOD_EARLY_MS || signed > GOOD_LATE_MS) continue;
+            if (signed < -GOOD_EARLY_MS) continue; // not reached yet
+            if (timeMs > n.endSec * 1000.0 + GOOD_LATE_MS) continue; // bar gone
             double d = Math.abs(signed);
             if (d < bestAbs) {
                 bestAbs = d;
@@ -132,12 +142,12 @@ public final class GameScoring {
         return grade;
     }
 
-    /** Advances the clock: pending notes whose window has closed become misses. */
+    /** Advances the clock: pending notes whose bar has left the line become misses. */
     public void tick(double nowMs) {
         for (int i = 0; i < noteIdx.length; i++) {
             if (state[i] != PENDING) continue;
             MidiFile.Note n = midi.notes.get(noteIdx[i]);
-            if (n.startSec * 1000.0 + GOOD_LATE_MS < nowMs) {
+            if (n.endSec * 1000.0 + GOOD_LATE_MS < nowMs) {
                 state[i] = MISS;
                 miss++;
                 streak = 0;

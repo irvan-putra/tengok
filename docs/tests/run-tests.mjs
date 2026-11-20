@@ -158,7 +158,7 @@ test("scoring: misses break the streak and the rank", () => {
   assert.equal(sc.strike(sc.notePitch(0), first), G.PERFECT);
   assert.equal(sc.strike(sc.notePitch(1), sc.noteStartMs(1)), G.PERFECT);
   assert.equal(sc.rankLive(), "SSS"); // 100 accuracy + streak 2*2
-  sc.tick(sc.noteStartMs(2) + G.GOOD_LATE_MS + 1); // note 2 slips past
+  sc.tick(sc.judgedNote(2).endSec * 1000 + G.GOOD_LATE_MS + 1); // note 2's bar leaves
   assert.equal(sc.miss, 1);
   assert.equal(sc.streak, 0);
   assert.equal(sc.accuracy(), 66);
@@ -177,6 +177,22 @@ test("rank ladder thresholds", () => {
   assert.equal(G.rank(0, 0), "D");
   assert.equal(G.rank(80, 10), "SSS"); // 80 + 20 bonus
   assert.equal(G.bonusPct(99), 20); // capped at 10
+});
+test("scoring: a sustained note stays hittable while its bar is on the line", () => {
+  // twotrack's C5 sustains 0-3 s: past onset + GOOD_LATE it must still
+  // score, because the bar still sits on the hit line (the cantina case).
+  const sc = new G.GameScoring(two, 1);
+  sc.tick(1500); // mid-sustain: no miss while the bar is on the line
+  assert.equal(sc.miss, 0);
+  assert.equal(sc.strike(72, 1500), G.GOOD); // caught during the sustain
+  assert.equal(sc.perfect, 0);
+  assert.equal(sc.good, 1);
+  // once the bar leaves (end 3000 + 400 slack), an unstruck note misses
+  sc.tick(3401);
+  assert.equal(sc.miss, 1); // the E5 was never struck
+  // and nothing scores after the bar is gone
+  const late = new G.GameScoring(two, 1);
+  assert.equal(late.strike(72, 3500), G.PENDING);
 });
 test("scoring: wrong pitch never grades", () => {
   const sc = new G.GameScoring(two, 1);

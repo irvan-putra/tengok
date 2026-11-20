@@ -164,9 +164,9 @@ public class MidiWriterTest {
     public void scoringMissesWhatTheClockPasses() throws Exception {
         MidiFile m = parse(song(new int[][]{{60, 480, 720}}));
         GameScoring s = new GameScoring(m, 0);
-        s.tick(500 + GameScoring.GOOD_LATE_MS + 1); // window closed
+        s.tick(750 + GameScoring.GOOD_LATE_MS + 1); // the bar (end 0.75 s) has left the line
         assertEquals(GameScoring.MISS, s.stateOf(0));
-        assertEquals(GameScoring.PENDING, s.strike(60, 900)); // too late to matter
+        assertEquals(GameScoring.PENDING, s.strike(60, 1200)); // too late to matter
         assertEquals(1, s.miss());
         assertEquals(0, s.streak());
     }
