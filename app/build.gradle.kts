@@ -2,8 +2,8 @@ plugins {
     id("com.android.application")
 }
 
-val appVersionName = "0.3.4"
-val appVersionCode = 9
+val appVersionName = "0.3.5"
+val appVersionCode = 10
 
 base {
     archivesName.set("tengok-v$appVersionName")
