@@ -68,6 +68,8 @@ jobs:
           cat > notes.md <<NOTES
           tengok ${VER}: peek into any file. MIDI songs show their summary, instruments and a piano roll and play on the phone's built-in synth; images zoom; audio plays; text reads; everything else opens in a paged hex view with a details sheet (type, size, SHA-256). Offline, no accounts, zero Android permissions, files never leave the phone.
 
+          Game mode turns any MIDI song into falling notes you can tap on an on-screen piano or play on a USB MIDI keyboard. Velocity and human timing stay as played, with no snapping. Scores and the diagnostic log stay on the phone; sharing a crash or diagnostics is always your tap.
+
           Signed with the tengok key (certificate SHA-256 ${EXPECTED_CERT_SHA256}).
           SHA-256 of the APK is in the attached .sha256 file.
           NOTES
