@@ -117,7 +117,7 @@ jobs:
 
           Game mode turns any MIDI song into falling notes you can tap on an on-screen piano or play on a USB MIDI keyboard. Velocity and human timing stay as played, with no snapping. Scores and the diagnostic log stay on the phone; sharing a crash or diagnostics is always your tap.
 
-          0.3.1 fixes game mode for songs whose notes start late or pause for bars: instead of a blank lane, a "next note in N s - tap to jump" hint appears and a draggable song timeline with a clock shows position, like normal playback. Skipping forward never marks the upcoming note missed; played notes leave the lane; after the last note, play starts a fresh round. The score clock now follows playback speed.
+          0.3.2 makes the on-screen piano playable on a phone: keys keep a finger-sized minimum width and the board pans by itself to keep the next notes in view; drag sideways on the keys to look around without striking. A tap still grades at the instant the finger lands. A live letter rank (D up to SSS, from accuracy plus your streak, so a miss pulls it down) shows in the lane while you play and as the final grade. The home screen keeps a recent-files list so a file opened once is one tap away: removing an entry only clears the list, the file itself is never touched, and reopening uses the access Android already granted. Still offline, still zero Android permissions.
 
           The built-in folder explorer lists a folder you pick once, so you can open files without leaving the app. Browsing is read-only: no delete, rename or move.
 
