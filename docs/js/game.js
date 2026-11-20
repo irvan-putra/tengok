@@ -167,14 +167,16 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   let heldSpark = null;
 
   function spawnSparks(pitch, grade, count) {
-    const x = (kw.leftPx(pitch) - vx)
-        + (G.isBlack(pitch) ? kw.blackW() : kw.whiteW) / 2;
-    const y = canvas.height - KEY_H - 8; // clear of the hit line and the finger
+    const keyW = G.isBlack(pitch) ? kw.blackW() : kw.whiteW;
+    const keyL = kw.leftPx(pitch) - vx;
     const color = grade === G.PERFECT ? "255,216,77" : "155,225,93";
     for (let i = 0; i < count; i++) {
-      const a = (-165 + Math.random() * 150) * Math.PI / 180; // upward fan
-      const v = 0.22 + Math.random() * 0.38; // px per ms
-      sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+      /* a tight column at the border between the falling notes and the
+       * piano: inside the struck key's width, just above its top */
+      sparks.push({ x: keyL + keyW * (0.25 + Math.random() * 0.5),
+          y: canvas.height - KEY_H - 2,
+          vx: (Math.random() - 0.5) * 0.04,
+          vy: -(0.06 + Math.random() * 0.10),
           t: performance.now(), color });
     }
     while (sparks.length > 72) sparks.shift();
@@ -224,6 +226,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       if (p.panning) {
         vx = kw.clampViewport(vx - dx);
         lastPanAt = performance.now();
+        twStart = 0; // a drag cancels any in-flight glide
       } else if (Math.abs(e.clientX - rect.left - p.startX) > 10) {
         p.panning = true; // a deliberate drag is not a tap
         clearTimeout(p.graceTimer); // and a real drag never strikes
@@ -360,7 +363,10 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     for (const n of midi.notes) {
       const yTop = strikeY - (n.startSec - now) * speed;
       const yBot = strikeY - (n.endSec - now) * speed;
-      if (yBot < -4 || yTop > strikeY) continue;
+      /* a note stays visible until its trailing edge crosses the strike
+       * line: the body sinks into the piano behind the keys instead of
+       * vanishing the instant it is struck */
+      if (yBot < -4 || yBot > strikeY) continue;
       const x1 = kw.leftPx(n.pitch) - vx;
       const x2 = kw.rightPx(n.pitch) - vx;
       if (x2 < 0 || x1 > w) continue;
@@ -378,9 +384,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
         g.globalAlpha = 0.35;
       }
       g.fillStyle = color;
-      const top = Math.min(yTop, strikeY - 2);
-      const bottom = Math.min(yBot, strikeY - 2);
-      g.fillRect(x1 + 1, bottom, Math.max(2, x2 - x1 - 2), Math.max(3, top - bottom));
+      g.fillRect(x1 + 1, yBot, Math.max(2, x2 - x1 - 2), Math.max(3, yTop - yBot));
       g.globalAlpha = 1;
     }
 
@@ -501,16 +505,20 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     if (kw.leftPx(loP) - vx >= margin && kw.rightPx(hiP) - vx <= canvas.clientWidth - margin) return;
     const target = kw.viewportCentering(Math.max(lo, loP - 2), Math.min(hi, hiP + 2));
     const diff = target - vx;
-    if (Math.abs(diff) < 1) { vx = target; return; }
+    if (Math.abs(diff) < 1) { vx = target; twDest = target; twStart = 0; return; }
+    /* fixed-duration smoothstep glide: zero speed at both ends, so the board
+     * sweeps to the next cluster without a visible lurch. A retarget restarts
+     * the sweep from wherever the board is now. */
     const t = performance.now();
-    const dt = Math.min(0.1, lastFollowT ? (t - lastFollowT) / 1000 : 0.016);
-    lastFollowT = t;
-    let step = diff * 4 * dt;
-    const cap = canvas.clientWidth * 1.5 * dt;
-    step = Math.max(-cap, Math.min(cap, step));
-    vx = Math.abs(step) >= Math.abs(diff) ? target : vx + step;
+    if (!twStart || Math.abs(target - twDest) > 4) {
+      twFrom = vx; twDest = target; twStart = t;
+      twDur = Math.max(320, 1.5 * Math.abs(target - vx) / (canvas.clientWidth * 0.9) * 1000);
+    }
+    const u = Math.min(1, (t - twStart) / twDur);
+    const e = u * u * (3 - 2 * u);
+    vx = twFrom + (twDest - twFrom) * e;
   }
-  let lastFollowT = 0;
+  let twFrom = 0, twDest = 0, twStart = 0, twDur = 1;
 
   function frame() {
     if (ended) return;
