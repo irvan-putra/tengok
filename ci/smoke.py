@@ -425,74 +425,15 @@ back()
 
 # ---- game mode: two fingers strike a chord together ----
 # Phone report: simultaneous notes only registered one key - the game view
-# tracked a single finger and ignored the rest. Drive a genuine two-pointer
-# stream through the kernel input device (sendevent MT protocol): both
-# fingers down together, the second lifts while the first still holds, and
-# BOTH keys must tap, strike and score. Pre-fix, the second finger never
-# even reached the view as a tap.
-def mt_probe_all():
-    out = adb("shell", "getevent", "-pl").stdout.decode("utf-8", "replace")
-    devs = []
-    cur = None
-    slot = xmax = ymax = None
-    for line in out.splitlines():
-        m = re.match(r"add device \d+: (\S+)", line)
-        if m:
-            if cur and slot and xmax and ymax:
-                devs.append((cur, xmax, ymax))
-            cur, slot, xmax, ymax = m.group(1), None, None, None
-            continue
-        if "ABS_MT_SLOT" in line:
-            slot = True
-        m = re.search(r"ABS_MT_POSITION_X.*max (\d+)", line)
-        if m:
-            xmax = int(m.group(1))
-        m = re.search(r"ABS_MT_POSITION_Y.*max (\d+)", line)
-        if m:
-            ymax = int(m.group(1))
-    if cur and slot and xmax and ymax:
-        devs.append((cur, xmax, ymax))
-    return devs
-
-
-def mt_tap1(x, y, dev, xmax, ymax, scr_w, scr_h):
-    # one finger through the MT protocol: proves the device, scaling and
-    # event shape reach the view before a chord is attempted on it
-    rx = lambda v: int(round(v * xmax / max(1, scr_w - 1)))
-    ry = lambda v: int(round(v * ymax / max(1, scr_h - 1)))
-    script = (
-        f"sendevent {dev} 3 47 0; sendevent {dev} 3 57 401; "
-        f"sendevent {dev} 3 53 {rx(x)}; sendevent {dev} 3 54 {ry(y)}; "
-        f"sendevent {dev} 1 330 1; sendevent {dev} 0 0 0; "
-        "sleep 0.2; "
-        f"sendevent {dev} 3 57 4294967295; sendevent {dev} 1 330 0; "
-        f"sendevent {dev} 0 0 0"
-    )
-    adb("shell", script)
-
-
-def chord_hold(x1, y1, x2, y2, dev, xmax, ymax, scr_w, scr_h,
-               both_down_ms=500, held_extra_ms=2000):
-    rx = lambda x: int(round(x * xmax / max(1, scr_w - 1)))
-    ry = lambda y: int(round(y * ymax / max(1, scr_h - 1)))
-    script = (
-        f"sendevent {dev} 3 47 0; sendevent {dev} 3 57 301; "
-        f"sendevent {dev} 3 53 {rx(x1)}; sendevent {dev} 3 54 {ry(y1)}; "
-        f"sendevent {dev} 1 330 1; sendevent {dev} 0 0 0; "
-        "sleep 0.15; "
-        f"sendevent {dev} 3 47 1; sendevent {dev} 3 57 302; "
-        f"sendevent {dev} 3 53 {rx(x2)}; sendevent {dev} 3 54 {ry(y2)}; "
-        f"sendevent {dev} 0 0 0; "
-        f"sleep {both_down_ms / 1000}; "
-        f"sendevent {dev} 3 47 1; sendevent {dev} 3 57 4294967295; "
-        f"sendevent {dev} 0 0 0; "
-        f"sleep {held_extra_ms / 1000}; "
-        f"sendevent {dev} 3 47 0; sendevent {dev} 3 57 4294967295; "
-        f"sendevent {dev} 1 330 0; sendevent {dev} 0 0 0"
-    )
-    return subprocess.Popen(["adb", "shell", script],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
+# tracked a single finger and ignored the rest. The CI emulator image
+# accepts no kernel-level multitouch injection (sendevent MT streams on
+# all 11 MT-capable devices never reached the view), so this drives the
+# same MotionEvent sequence through the app's DEBUG-ONLY dispatch seam
+# (GameView.debugInjectChord, triggered by an adb broadcast): both
+# pointers down together, the second lifts while the first still holds,
+# and BOTH keys must tap, strike and score. This is a synthetic dispatch,
+# not real hardware input - it proves the per-pointer runtime path, not
+# the touchscreen driver.
 
 tap("MIDI: chord song")
 need("MIDI format 0")
@@ -529,49 +470,25 @@ for _ in range(40):
         pitch = int(m.group(1))
         break
     time.sleep(0.5)
-mt_devs = mt_probe_all()
-ws = adb("shell", "wm", "size").stdout.decode("utf-8", "replace")
-m = re.search(r"(\d+)x(\d+)", ws)
-scr_w, scr_h = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
-if (pitch != 36 or 36 not in keymap or 40 not in keymap or 39 not in keymap
-        or not mt_devs or not scr_w):
+if pitch != 36 or 36 not in keymap or 40 not in keymap:
     shot("FAILED-midi-game-chord")
-    print("chord setup missing: wait pitch", pitch, "keymap 36/39/40",
-          36 in keymap, 39 in keymap, 40 in keymap,
-          "mt devices", mt_devs, "screen", ws.strip())
-    sys.exit(1)
-x1, y1 = keymap[36]
-x2, y2 = keymap[40]
-if not (0 < x1 < scr_w and 0 < x2 < scr_w):
-    shot("FAILED-midi-game-chord")
-    print("chord keys not both on screen:", x1, x2, "screen", scr_w)
+    print("chord setup missing: wait pitch", pitch, "keymap 36/40",
+          36 in keymap, 40 in keymap)
     sys.exit(1)
 adb("shell", "logcat", "-c")
-# Pick the device whose stream actually reaches the view: one MT tap on
-# key 39, which has NO note in this song - a PENDING strike that leaves
-# the round's score untouched but proves device + scaling + protocol.
-mt = None
-for cand in mt_devs:
-    mt_tap1(*keymap[39], *cand, scr_w, scr_h)
-    time.sleep(1.2)
-    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
-    if "TENGOK-GAME-TAP pitch=39" in out:
-        mt = cand
-        break
-if mt is None:
-    shot("FAILED-midi-game-chord")
-    print("sendevent MT injection reached no input device on this image; "
-          "candidates:", mt_devs, "screen", scr_w, "x", scr_h)
-    sys.exit(1)
-print("mt device", mt[0], "accepted a single-finger stream (PENDING tap on 39)")
-proc = chord_hold(x1, y1, x2, y2, *mt, scr_w, scr_h)
-time.sleep(0.6)  # both struck by grace; second finger up; first still holding
+adb("shell", "am", "broadcast", "-a", "com.vanipy.tengok.debug.CHORD",
+    "--ei", "a", "36", "--ei", "b", "40", "-p", "com.vanipy.tengok")
+time.sleep(1.2)  # both struck by grace; second finger up; first still holding
 shot("16-chord-held")
-proc.wait(timeout=20)
-time.sleep(1)
+time.sleep(1.5)
 out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+inject = re.findall(r"TENGOK-GAME-CHORD-INJECT a=(\d+) b=(\d+)", out)
 taps = re.findall(r"TENGOK-GAME-TAP pitch=(\d+)", out)
 strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
+if not ("36", "40") in inject:
+    shot("FAILED-midi-game-chord")
+    print("chord dispatch seam never injected (debug receiver missing?):", inject)
+    sys.exit(1)
 if not ("36" in taps and "40" in taps):
     shot("FAILED-midi-game-chord")
     print("chord did not reach the view as TWO key taps:", taps)
@@ -581,7 +498,8 @@ if not (any(p_ == "36" and g in ("1", "2") for p_, g in strikes)
     shot("FAILED-midi-game-chord")
     print("chord keys did not both score:", strikes)
     sys.exit(1)
-print("chord: two fingers held, one released, both keys scored:", strikes)
+print("chord: two-pointer dispatch seam (synthetic, not real hardware), "
+      "one finger released early, both keys scored:", strikes)
 # the round still completes: the single note after the chord scores too
 pitch = None
 for _ in range(40):

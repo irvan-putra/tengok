@@ -219,7 +219,29 @@ public final class GameController {
         updateScoreLine();
     }
 
+    /** DEBUG-ONLY: adb-reachable chord injection for the emulator smoke
+     *  test (a synthetic MotionEvent dispatch, not real hardware input).
+     *  Registered only in debug builds, only while the game runs. */
+    private android.content.BroadcastReceiver chordReceiver;
+
     public void start() {
+        if (com.vanipy.tengok.BuildConfig.DEBUG && chordReceiver == null) {
+            chordReceiver = new android.content.BroadcastReceiver() {
+                @Override public void onReceive(Context c, android.content.Intent i) {
+                    if (gameView != null) {
+                        gameView.debugInjectChord(i.getIntExtra("a", -1),
+                                i.getIntExtra("b", -1));
+                    }
+                }
+            };
+            android.content.IntentFilter f =
+                    new android.content.IntentFilter("com.vanipy.tengok.debug.CHORD");
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                ctx.registerReceiver(chordReceiver, f, Context.RECEIVER_EXPORTED);
+            } else {
+                ctx.registerReceiver(chordReceiver, f);
+            }
+        }
         setupRound();
         handler.post(ticker);
     }
@@ -423,6 +445,11 @@ public final class GameController {
 
     public void release() {
         released = true;
+        if (chordReceiver != null) {
+            try { ctx.unregisterReceiver(chordReceiver); }
+            catch (IllegalArgumentException ignored) { }
+            chordReceiver = null;
+        }
         handler.removeCallbacksAndMessages(null);
         releaseBacking();
         tones.release();
