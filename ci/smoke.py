@@ -100,6 +100,27 @@ def wait_present(text, exact=False, tries=8):
     return False
 
 
+def wait_picker(filename):
+    for _ in range(12):
+        if present(filename):
+            return
+        time.sleep(1)
+    shot("FAILED-picker-" + re.sub(r"\W+", "_", filename)[:30])
+    print("picker never opened for", filename)
+    sys.exit(1)
+
+
+def dismiss_picker(filename):
+    for _ in range(8):
+        if not present(filename):
+            return
+        back()
+        time.sleep(1)
+    shot("FAILED-picker-stuck-" + re.sub(r"\W+", "_", filename)[:30])
+    print("picker would not dismiss for", filename)
+    sys.exit(1)
+
+
 def back():
     adb("shell", "input", "keyevent", "4")
     time.sleep(1)
@@ -1000,7 +1021,7 @@ time.sleep(2)
 need("480 × 320")
 before = fixture_hash("painted.png")
 tap("Save as JPEG image")
-time.sleep(3)  # DocumentsUI inflates
+wait_picker("painted.jpg")  # DocumentsUI inflate time varies wildly under load
 tap("Save", exact=True)
 need("Saved painted.jpg.")
 path = sdcard_path("painted*.jpg")
@@ -1020,9 +1041,9 @@ if fixture_hash("painted.png") != before:
 
 # picker cancel: no save, no file, no false status
 tap("Save as WebP image")
-time.sleep(3)
+wait_picker("painted.webp")
 back()
-time.sleep(1)
+dismiss_picker("painted.webp")
 if wait_present("Saved painted.webp", tries=3):
     shot("FAILED-convert-cancel")
     print("cancel path reported a save")
@@ -1040,7 +1061,7 @@ tap("Image: corrupt PNG")
 time.sleep(2)
 need("can't show this image")
 tap("Save as PNG image")
-time.sleep(3)
+wait_picker("corrupt.png")
 tap("Save", exact=True)
 need("Could not convert")
 print("convert error path: failure surfaced as status text")
@@ -1051,7 +1072,7 @@ time.sleep(1)
 tap("Text: latin-1 cafe")
 time.sleep(2)
 tap("Save as UTF-8 text")
-time.sleep(3)
+wait_picker("latin1.txt")
 tap("Save", exact=True)
 need("Saved latin1.txt.")
 path = sdcard_path("latin1*.txt")
