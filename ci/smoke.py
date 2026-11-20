@@ -430,15 +430,16 @@ back()
 # fingers down together, the second lifts while the first still holds, and
 # BOTH keys must tap, strike and score. Pre-fix, the second finger never
 # even reached the view as a tap.
-def mt_probe():
+def mt_probe_all():
     out = adb("shell", "getevent", "-pl").stdout.decode("utf-8", "replace")
+    devs = []
     cur = None
     slot = xmax = ymax = None
     for line in out.splitlines():
         m = re.match(r"add device \d+: (\S+)", line)
         if m:
             if cur and slot and xmax and ymax:
-                return cur, xmax, ymax
+                devs.append((cur, xmax, ymax))
             cur, slot, xmax, ymax = m.group(1), None, None, None
             continue
         if "ABS_MT_SLOT" in line:
@@ -450,8 +451,24 @@ def mt_probe():
         if m:
             ymax = int(m.group(1))
     if cur and slot and xmax and ymax:
-        return cur, xmax, ymax
-    return None
+        devs.append((cur, xmax, ymax))
+    return devs
+
+
+def mt_tap1(x, y, dev, xmax, ymax, scr_w, scr_h):
+    # one finger through the MT protocol: proves the device, scaling and
+    # event shape reach the view before a chord is attempted on it
+    rx = lambda v: int(round(v * xmax / max(1, scr_w - 1)))
+    ry = lambda v: int(round(v * ymax / max(1, scr_h - 1)))
+    script = (
+        f"sendevent {dev} 3 47 0; sendevent {dev} 3 57 401; "
+        f"sendevent {dev} 3 53 {rx(x)}; sendevent {dev} 3 54 {ry(y)}; "
+        f"sendevent {dev} 1 330 1; sendevent {dev} 0 0 0; "
+        "sleep 0.2; "
+        f"sendevent {dev} 3 57 4294967295; sendevent {dev} 1 330 0; "
+        f"sendevent {dev} 0 0 0"
+    )
+    adb("shell", script)
 
 
 def chord_hold(x1, y1, x2, y2, dev, xmax, ymax, scr_w, scr_h,
@@ -512,15 +529,16 @@ for _ in range(40):
         pitch = int(m.group(1))
         break
     time.sleep(0.5)
-mt = mt_probe()
+mt_devs = mt_probe_all()
 ws = adb("shell", "wm", "size").stdout.decode("utf-8", "replace")
 m = re.search(r"(\d+)x(\d+)", ws)
 scr_w, scr_h = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
-if (pitch != 36 or 36 not in keymap or 40 not in keymap or mt is None
-        or not scr_w):
+if (pitch != 36 or 36 not in keymap or 40 not in keymap or 39 not in keymap
+        or not mt_devs or not scr_w):
     shot("FAILED-midi-game-chord")
-    print("chord setup missing: wait pitch", pitch, "keymap 36/40",
-          36 in keymap, 40 in keymap, "mt device", mt, "screen", ws.strip())
+    print("chord setup missing: wait pitch", pitch, "keymap 36/39/40",
+          36 in keymap, 39 in keymap, 40 in keymap,
+          "mt devices", mt_devs, "screen", ws.strip())
     sys.exit(1)
 x1, y1 = keymap[36]
 x2, y2 = keymap[40]
@@ -529,6 +547,23 @@ if not (0 < x1 < scr_w and 0 < x2 < scr_w):
     print("chord keys not both on screen:", x1, x2, "screen", scr_w)
     sys.exit(1)
 adb("shell", "logcat", "-c")
+# Pick the device whose stream actually reaches the view: one MT tap on
+# key 39, which has NO note in this song - a PENDING strike that leaves
+# the round's score untouched but proves device + scaling + protocol.
+mt = None
+for cand in mt_devs:
+    mt_tap1(*keymap[39], *cand, scr_w, scr_h)
+    time.sleep(1.2)
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    if "TENGOK-GAME-TAP pitch=39" in out:
+        mt = cand
+        break
+if mt is None:
+    shot("FAILED-midi-game-chord")
+    print("sendevent MT injection reached no input device on this image; "
+          "candidates:", mt_devs, "screen", scr_w, "x", scr_h)
+    sys.exit(1)
+print("mt device", mt[0], "accepted a single-finger stream (PENDING tap on 39)")
 proc = chord_hold(x1, y1, x2, y2, *mt, scr_w, scr_h)
 time.sleep(0.6)  # both struck by grace; second finger up; first still holding
 shot("16-chord-held")
