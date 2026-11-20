@@ -17,6 +17,7 @@ import androidx.media3.transformer.Composition;
 import androidx.media3.transformer.EditedMediaItem;
 import androidx.media3.transformer.ExportException;
 import androidx.media3.transformer.ExportResult;
+import androidx.media3.transformer.ProgressHolder;
 import androidx.media3.transformer.Transformer;
 
 import java.io.File;
@@ -195,7 +196,7 @@ public class ConvertPanel {
         pollProgress();
     }
 
-    private final Transformer.ProgressHolder progressHolder = new Transformer.ProgressHolder();
+    private final ProgressHolder progressHolder = new ProgressHolder();
 
     private void pollProgress() {
         if (transformer == null) return;
