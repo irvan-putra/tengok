@@ -105,7 +105,8 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   let playback = null;
   let ended = false;
   let raf = 0;
-  const flashes = new Map(); // pitch -> performance.now() of strike
+  const flashes = new Map(); // pitch -> { t: performance.now(), grade }
+  const pressed = new Set(); // pitches physically held right now
 
   function nowSec() {
     return running ? offsetSec + (performance.now() - clockStart) / 1000 : offsetSec;
@@ -142,7 +143,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     const nowMs = nowSec() * 1000;
     const grade = scoring.strike(pitch, nowMs);
     ctx.synth.strike(pitch, 100, judgedProgram);
-    flashes.set(pitch, performance.now());
+    flashes.set(pitch, { t: performance.now(), grade });
     if (grade === G.PERFECT || grade === G.GOOD) updateHud();
   }
 
@@ -159,7 +160,13 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   const pointers = new Map();
   canvas.addEventListener("pointerdown", (e) => {
     canvas.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY, startX: e.offsetX, panning: false });
+    const rec = { x: e.offsetX, y: e.offsetY, startX: e.offsetX, panning: false, pitch: -1 };
+    const rect = canvas.getBoundingClientRect();
+    if (e.clientY - rect.top >= canvas.clientHeight - KEY_H) {
+      rec.pitch = kw.pitchAt(e.clientX - rect.left + vx);
+      if (rec.pitch >= 0) pressed.add(rec.pitch); // immediate "registered"
+    }
+    pointers.set(e.pointerId, rec);
   });
   canvas.addEventListener("pointermove", (e) => {
     const p = pointers.get(e.pointerId);
@@ -172,7 +179,8 @@ function runGame(viewArea, midi, trackIndex, ctx) {
         vx = kw.clampViewport(vx - dx);
         lastPanAt = performance.now();
       } else if (Math.abs(e.clientX - rect.left - p.startX) > 10) {
-        p.panning = true;
+        p.panning = true; // a deliberate drag is not a tap
+        if (p.pitch >= 0) { pressed.delete(p.pitch); p.pitch = -1; }
       }
       p.x = e.clientX - rect.left;
     }
@@ -180,7 +188,9 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   canvas.addEventListener("pointerup", (e) => {
     const p = pointers.get(e.pointerId);
     pointers.delete(e.pointerId);
-    if (!p || p.panning) return;
+    if (!p) return;
+    if (p.pitch >= 0) pressed.delete(p.pitch);
+    if (p.panning) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -189,7 +199,11 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       if (pitch >= 0) strike(pitch);
     }
   });
-  canvas.addEventListener("pointercancel", (e) => pointers.delete(e.pointerId));
+  canvas.addEventListener("pointercancel", (e) => {
+    const p = pointers.get(e.pointerId);
+    if (p && p.pitch >= 0) pressed.delete(p.pitch);
+    pointers.delete(e.pointerId);
+  });
 
   /* Letter keys from the leftmost fully visible white key. */
   function keyDown(e) {
@@ -206,12 +220,13 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       // firstWhite may be black if it pokes in; step to next white
       while (firstWhite <= hi && (G.isBlack(firstWhite) || kw.leftPx(firstWhite) < vx - 0.5)) firstWhite++;
     }
+    const held = (p) => { heldKeys.set(k, p); pressed.add(p); strike(p); };
     let wi = WHITE_KEYS.indexOf(k);
     if (wi >= 0) {
       let count = 0;
       for (let p = firstWhite; p <= hi; p++) {
         if (G.isBlack(p)) continue;
-        if (count === wi) { strike(p); return; }
+        if (count === wi) { held(p); return; }
         count++;
       }
       return;
@@ -222,12 +237,21 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       for (let p = firstWhite; p <= hi; p++) {
         if (!G.isBlack(p)) continue;
         if (kw.centerPx(p) < vx) continue;
-        if (count === bi) { strike(p); return; }
+        if (count === bi) { held(p); return; }
         count++;
       }
     }
   }
   window.addEventListener("keydown", keyDown);
+  const heldKeys = new Map(); // letter key -> pitch it struck
+  function keyUp(e) {
+    const p = heldKeys.get(e.key.toLowerCase());
+    if (p !== undefined) {
+      heldKeys.delete(e.key.toLowerCase());
+      pressed.delete(p);
+    }
+  }
+  window.addEventListener("keyup", keyUp);
 
   /* Web MIDI where the browser has it (Chrome/Edge; not Firefox/Safari). */
   if (navigator.requestMIDIAccess) {
@@ -237,7 +261,8 @@ function runGame(viewArea, midi, trackIndex, ctx) {
         names.push(input.name || "MIDI keyboard");
         input.onmidimessage = (msg) => {
           const [st, pitch, vel] = msg.data;
-          if ((st & 0xF0) === 0x90 && vel > 0) strike(pitch);
+          if ((st & 0xF0) === 0x90 && vel > 0) { pressed.add(pitch); strike(pitch); }
+          else if ((st & 0xF0) === 0x80 || ((st & 0xF0) === 0x90 && vel === 0)) pressed.delete(pitch);
         };
       }
       midiLine.textContent = names.length
@@ -320,9 +345,20 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       if (G.isBlack(p)) continue;
       const x = kw.leftPx(p) - vx;
       if (x > w || x + kw.whiteW < 0) continue;
-      const flash = flashes.get(p);
-      if (flash && performance.now() - flash < 150) {
-        g.fillStyle = "#FFE9B8";
+      /* a judged strike flashes its key 350ms: green Perfect, amber Good,
+       * grey when the tap registered but matched no pending note */
+      const f = flashes.get(p);
+      if (f) {
+        const age = performance.now() - f.t;
+        if (age < 350) {
+          const rgb = f.grade === G.PERFECT ? "61,163,93"
+              : f.grade === G.GOOD ? "255,179,0" : "138,144,162";
+          g.fillStyle = `rgba(${rgb},${(0.43 * (1 - age / 350)).toFixed(3)})`;
+          g.fillRect(x, kbY, kw.whiteW, KEY_H);
+        }
+      }
+      if (pressed.has(p)) { // the key under the finger: "registered"
+        g.fillStyle = "rgba(0,0,0,0.20)";
         g.fillRect(x, kbY, kw.whiteW, KEY_H);
       }
       g.strokeStyle = "#B9BECB";
@@ -334,9 +370,22 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       const x = kw.leftPx(p) - vx;
       const bw = kw.blackW();
       if (x > w || x + bw < 0) continue;
-      const flash = flashes.get(p);
-      g.fillStyle = flash && performance.now() - flash < 150 ? "#8A6D00" : "#22242E";
+      g.fillStyle = "#22242E";
       g.fillRect(x, kbY, bw, KEY_H * 0.62);
+      const fb = flashes.get(p);
+      if (fb) {
+        const age = performance.now() - fb.t;
+        if (age < 350) {
+          const rgb = fb.grade === G.PERFECT ? "61,163,93"
+              : fb.grade === G.GOOD ? "255,179,0" : "138,144,162";
+          g.fillStyle = `rgba(${rgb},${(0.43 * (1 - age / 350)).toFixed(3)})`;
+          g.fillRect(x, kbY, bw, KEY_H * 0.62);
+        }
+      }
+      if (pressed.has(p)) {
+        g.fillStyle = "rgba(255,255,255,0.40)";
+        g.fillRect(x, kbY, bw, KEY_H * 0.62);
+      }
     }
 
     /* pan hint arrows when the board extends past an edge */
@@ -411,6 +460,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     if (playback) playback.stop();
     ctx.synth.stop();
     window.removeEventListener("keydown", keyDown);
+    window.removeEventListener("keyup", keyUp);
     window.removeEventListener("resize", resize);
   }
   ctx.onCleanup(stopAll);
