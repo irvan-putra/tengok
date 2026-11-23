@@ -428,7 +428,9 @@ score = None
 for _ in range(6):
     for n in nodes():
         m = re.match(
-            r"perfect (\d+) · good (\d+) · miss (\d+) · streak (\d+) · rank (\S+)",
+            r"(?:done! )?perfect (\d+) · good (\d+) · miss (\d+) · "
+            r"(?:best )?streak (\d+) · (?:accuracy \d+% · score \d+ · )?"
+            r"rank (\S+)",
             n.get("text") or "")
         if m:
             score = m
@@ -751,7 +753,9 @@ score = None
 for _ in range(6):
     for n in nodes():
         m = re.match(
-            r"perfect (\d+) · good (\d+) · miss (\d+) · streak (\d+) · rank (\S+)",
+            r"(?:done! )?perfect (\d+) · good (\d+) · miss (\d+) · "
+            r"(?:best )?streak (\d+) · (?:accuracy \d+% · score \d+ · )?"
+            r"rank (\S+)",
             n.get("text") or "")
         if m:
             score = m
