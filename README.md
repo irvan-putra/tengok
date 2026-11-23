@@ -8,8 +8,10 @@ ever: tengok asks for **zero Android permissions**, has no accounts and no
 network code at all.
 
 GPL-3.0. Package `com.vanipy.tengok`. Direct APK download is on the
-[releases page](../../releases); each release is signed with the tengok key
-and ships its SHA-256 next to the APK.
+[releases page](../../releases); each release is signed with the tengok key.
+The trusted checksum is GitHub's per-asset digest on each release asset;
+older releases also carry a `.sha256` sidecar, kept but no longer published
+for new releases. Also listed in the [kaji gallery](https://vanipy.com/kaji/apk/).
 
 ## What it opens today (v0.1.0)
 
@@ -65,7 +67,7 @@ the page itself.
 
 ## Conversion ideas (recorded, not built)
 
-From Irvan, 2026-11-20, to revisit: text rendered to an image; OCR (image
+Recorded 2026-11-20, to revisit: text rendered to an image; OCR (image
 to text); music to PDF as sheet notes (two ideas: printing notation from a
 note format like MIDI, and the much harder transcribing of raw audio);
 voice transcribed to a PDF. Conversion itself is in scope for web and
@@ -89,7 +91,7 @@ CI (`.github/workflows/`):
   verifies the playback position advances, and uploads screenshots.
 - **release** builds the signed APK from the repository's signing secrets,
   verifies the certificate digest, package, version and zero permissions,
-  and publishes a pre-release with the APK and its SHA-256.
+  and publishes a pre-release with the APK.
 
 The debug build's fixture screen (`FixtureActivity`) exists only in
 `app/src/debug`; release APKs never contain it or its synthetic files.
