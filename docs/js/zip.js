@@ -91,7 +91,7 @@ async function show(container, file, ctx) {
   const V = root.TengokViewers;
   const card = V.el("div", "card");
   container.appendChild(card);
-  let cancelled = false;
+  let cancelled = false, opening = false;
   ctx.onCleanup(() => { cancelled = true; });
   try {
     if (file.size > 32 * 1024 * 1024) throw new Error("ZIP listing is limited to 32 MB archives.");
@@ -105,11 +105,12 @@ async function show(container, file, ctx) {
       const row = V.el("div", "zip-entry");
       const button = V.el(entry.directory ? "div" : "button", entry.directory ? "mono" : "btn mono", (entry.directory ? "" : "Open: ") + entry.name);
       if (!entry.directory) button.addEventListener("click", async () => {
-        button.disabled=true;
+        if (opening) return;
+        opening=true; button.disabled=true;
         const status=V.el("div","muted small", "Opening in memory...");row.appendChild(status);
         try { const bytes=await open(archive,index); if(!cancelled) ctx.openArchiveFile(new File([bytes],entry.name)); }
         catch(e) { status.textContent=e.message; }
-        finally {button.disabled=false;}
+        finally {opening=false; button.disabled=false;}
       });
       row.appendChild(button);
       row.appendChild(V.el("div", "muted small", entry.directory ? "Folder" : V.humanSize(entry.size) + " · packed " + V.humanSize(entry.packed) + (entry.encrypted ? " · encrypted" : "")));
