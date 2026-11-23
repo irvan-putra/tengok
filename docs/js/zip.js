@@ -50,7 +50,7 @@ async function show(container, file, ctx) {
     if (file.size > 32 * 1024 * 1024) throw new Error("ZIP listing is limited to 32 MB archives.");
     const entries = parse(await file.arrayBuffer());
     if (cancelled) return;
-    card.appendChild(V.el("div", "card-title", "ZIP contents · " + entries.length + " entries"));
+    card.appendChild(V.el("div", "card-title", "ZIP contents · " + entries.length + (entries.length === 1 ? " entry" : " entries")));
     card.appendChild(V.el("p", "muted", "Read-only listing. Paths and sizes are declared by the archive, not verified file contents. Nothing is extracted or executed."));
     if (!entries.length) card.appendChild(V.el("p", "muted", "This ZIP is empty."));
     for (const entry of entries) {
@@ -59,7 +59,7 @@ async function show(container, file, ctx) {
       row.appendChild(V.el("div", "muted small", entry.directory ? "Folder" : V.humanSize(entry.size) + " · packed " + V.humanSize(entry.packed) + (entry.encrypted ? " · encrypted" : "")));
       card.appendChild(row);
     }
-    card.appendChild(V.el("p", "muted small", "Limits: 32 MB ZIP, 2,000 entries. No extraction, password opening, ZIP64 or split archives. Encrypted entries can be listed only when their directory is readable."));
+    card.appendChild(V.el("p", "muted zip-limits", "Limits: 32 MB ZIP, 2,000 entries. No extraction, password opening, ZIP64 or split archives. Encrypted entries can be listed only when their directory is readable."));
     const raw = V.el("button", "btn", "Show raw bytes");
     raw.addEventListener("click", ctx.onHex); card.appendChild(raw);
   } catch (e) {

@@ -245,3 +245,5 @@ footer a { color: #3E6FB0; }
 .samples-details .toolbar { margin-top: 8px; }
 
 .zip-entry { padding: 12px 0; border-bottom: 1px solid #8993a644; overflow-wrap: anywhere; }
+
+.zip-limits { font-size: 12px; word-break: normal; overflow-wrap: break-word; }

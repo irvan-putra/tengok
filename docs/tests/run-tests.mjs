@@ -546,3 +546,5 @@ test("ZIP: encrypted flag and untrusted path are only displayed metadata", () =>
   b[p+8]|=1; b.set(new TextEncoder().encode("../"),p+46);
   assert.equal(Z.parse(b)[0].encrypted,true); assert.ok(Z.parse(b)[0].name.startsWith("../"));
 });
+
+console.log("\n" + passed + " tests passed");
