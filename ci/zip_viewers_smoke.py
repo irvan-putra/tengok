@@ -14,7 +14,7 @@ def nodes():
 def tap(label):
     for i in range(8):
         ns=nodes()
-        n=next((n for n in ns if n.attrib.get('text','')==label),None)
+        n=next((n for n in ns if n.attrib.get('text','').lower()==label.lower()),None)
         if n is not None:
             a,b,c,d=map(int,re.findall(r'\d+',n.attrib['bounds']));adb('shell','input','tap',str((a+c)//2),str((b+d)//2));return
         time.sleep(1)
@@ -23,7 +23,7 @@ def tap(label):
 def need(fragment):
     for i in range(8):
         text='\n'.join(n.attrib.get('text','') for n in nodes())
-        if fragment in text:return
+        if fragment.lower() in text.lower():return
         time.sleep(1)
     raise AssertionError(fragment+' missing: '+text)
 
