@@ -1565,7 +1565,7 @@ zip_source = "docs/fixtures/sample.zip"
 adb("push", zip_source, "/data/local/tmp/tengok-sample.zip")
 adb("shell", "chmod", "644", "/data/local/tmp/tengok-sample.zip")
 adb("shell", "run-as", PKG, "cp", "/data/local/tmp/tengok-sample.zip", "files/sample.zip")
-adb("shell", "am", "start", "-n", f"{PKG}/.ViewerActivity", "-a", "android.intent.action.VIEW", "-t", "application/zip", "--es", "fixture_path", f"/data/user/0/{PKG}/files/sample.zip")
+adb("shell", "am", "start", "-n", f"{PKG}/.MainActivity", "-a", "android.intent.action.VIEW", "-t", "application/zip", "-d", f"content://{PKG}.fixtureprovider/sample.zip")
 need("ZIP contents")
 need("unggah-test.txt")
 need("53 bytes")
