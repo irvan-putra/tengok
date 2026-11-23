@@ -1395,6 +1395,31 @@ if present("Show as hex instead"):
     print("hex fallback offered on a lost grant; it would fail the same way")
     sys.exit(1)
 shot("13j-access-lost")
+
+# ---- an unresolvable provider must fail the same safe way ----
+# A remembered share from an app whose provider tengok can no longer see
+# (uninstalled, or invisible under Android 11+ package visibility) fails
+# with FileNotFoundException "No content provider", not SecurityException.
+# It must land on the same access-lost card with a re-pick instruction,
+# keep the app alive, and NOT offer the hex fallback.
+adb("shell", "am", "force-stop", PKG)
+time.sleep(1)
+rr = adb("shell", "am", "start",
+         "-a", "android.intent.action.VIEW",
+         "-n", f"{PKG}/.MainActivity",
+         "-t", "video/mp4",
+         "--ez", "fail_open_provider", "true",
+         "-d", f"content://{PKG}.fixtureprovider/smoke.mp4")
+print("am start viewer fail_open_provider:", rr.stdout.decode("utf-8", "replace").strip(),
+      rr.stderr.decode("utf-8", "replace").strip())
+time.sleep(2.5)
+need("tengok no longer has access to this file")
+need("Pick the file again from the home screen")
+if present("Show as hex instead"):
+    shot("FAILED-no-provider-hex")
+    print("hex fallback offered on an unresolvable provider; it would fail the same way")
+    sys.exit(1)
+shot("13k-no-provider-access-lost")
 # the VIEW flow finishes MainActivity behind the viewer, so back lands on
 # the launcher, not tengok's home: start home explicitly to prove the app
 # is alive and renders fine after the failure
