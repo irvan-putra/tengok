@@ -243,3 +243,5 @@ footer a { color: #3E6FB0; }
 .samples-details summary::before { content: "\25B8\00A0"; }
 .samples-details[open] summary::before { content: "\25BE\00A0"; }
 .samples-details .toolbar { margin-top: 8px; }
+
+.zip-entry { padding: 12px 0; border-bottom: 1px solid #8993a644; overflow-wrap: anywhere; }

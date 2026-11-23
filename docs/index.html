@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tengok - peek into files, right in this tab</title>
 <meta name="description" content="tengok is a local file viewer: MIDI with a piano roll and a play-along game, images, audio, text, and an honest hex view. Nothing is uploaded.">
-<link rel="stylesheet" href="style.css?v=d36910ef">
+<link rel="stylesheet" href="style.css?v=f8f2b34b">
 </head>
 <body>
 <header>
@@ -44,7 +44,8 @@
     </ul>
     <div class="card-title">Honest limits of the web version</div>
     <ul class="limits">
-      <li>PDF, SVG, office documents and archives open in the hex/details
+      <li>ZIP: read-only paths, file sizes and encrypted-entry labels. Up to 32 MB and 2,000 entries; no extraction, ZIP64 or split archives.</li>
+      <li>PDF, SVG, office documents and non-ZIP archives open in the hex/details
       view for now. Rich viewers for them are on the roadmap.</li>
       <li>MIDI plays through a simple built-in synth: browsers ship no General
       MIDI sounds, so instruments are approximate and pitch bends are not
@@ -95,7 +96,7 @@
   GPL-3.0
 </footer>
 
-<script src="js/sniffer.js?v=8e799f8f"></script>
+<script src="js/sniffer.js?v=6c7334db"></script>
 <script src="js/midi.js?v=820c13d3"></script>
 <script src="js/game-core.js?v=0d579b12"></script>
 <script src="js/synth.js?v=0fc106b2"></script>
@@ -103,6 +104,7 @@
 <script src="js/convert.js?v=fbea8dcf"></script>
 <script src="js/midi-view.js?v=0d9e899f"></script>
 <script src="js/game.js?v=4e14173c"></script>
-<script src="js/app.js?v=096bb2db"></script>
+<script src="js/zip.js?v=8a67ced4"></script>
+<script src="js/app.js?v=3ca6c280"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ import java.util.Locale;
  */
 public final class Sniffer {
 
-    public enum Kind {MIDI, IMAGE, AUDIO, VIDEO, TEXT, HEX}
+    public enum Kind {MIDI, IMAGE, AUDIO, VIDEO, ZIP, TEXT, HEX}
 
     private Sniffer() {
     }
@@ -27,6 +27,7 @@ public final class Sniffer {
 
     static Kind byMagic(byte[] h) {
         if (h == null || h.length < 4) return null;
+        if (h[0] == 'P' && h[1] == 'K' && ((h[2] == 3 && h[3] == 4) || (h[2] == 5 && h[3] == 6) || (h[2] == 7 && h[3] == 8))) return Kind.ZIP;
         if (h[0] == 'M' && h[1] == 'T' && h[2] == 'h' && h[3] == 'd') return Kind.MIDI;
         if ((h[0] & 0xFF) == 0x89 && h[1] == 'P' && h[2] == 'N' && h[3] == 'G') return Kind.IMAGE;
         if ((h[0] & 0xFF) == 0xFF && (h[1] & 0xFF) == 0xD8) return Kind.IMAGE; // jpeg
@@ -58,6 +59,7 @@ public final class Sniffer {
         String m = mime.toLowerCase(Locale.ROOT);
         if (m.equals("audio/midi") || m.equals("audio/x-midi") || m.equals("audio/mid")
                 || m.equals("application/x-midi")) return Kind.MIDI;
+        if (m.equals("application/zip") || m.equals("application/x-zip-compressed")) return Kind.ZIP;
         if (m.startsWith("image/")) return Kind.IMAGE;
         if (m.equals("audio/mpeg") || m.equals("audio/mp4") || m.equals("audio/ogg")
                 || m.equals("audio/flac") || m.equals("audio/x-wav") || m.equals("audio/wav")
@@ -74,6 +76,7 @@ public final class Sniffer {
         if (dot < 0 || dot == name.length() - 1) return null;
         String e = name.substring(dot + 1).toLowerCase(Locale.ROOT);
         switch (e) {
+            case "zip": return Kind.ZIP;
             case "mid":
             case "midi":
             case "rmi":

@@ -11,9 +11,11 @@ const AUDIO = "AUDIO";
 const VIDEO = "VIDEO";
 const TEXT = "TEXT";
 const HEX = "HEX";
+const ZIP = "ZIP";
 
 function byMagic(h) {
   if (!h || h.length < 4) return null;
+  if (h[0] === 0x50 && h[1] === 0x4B && ((h[2] === 3 && h[3] === 4) || (h[2] === 5 && h[3] === 6) || (h[2] === 7 && h[3] === 8))) return ZIP;
   if (h[0] === 0x4D && h[1] === 0x54 && h[2] === 0x68 && h[3] === 0x64) return MIDI; // MThd
   if (h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4E && h[3] === 0x47) return IMAGE; // PNG
   if (h[0] === 0xFF && h[1] === 0xD8) return IMAGE; // jpeg
@@ -44,6 +46,7 @@ function byMime(mime) {
   const m = mime.toLowerCase();
   if (m === "audio/midi" || m === "audio/x-midi" || m === "audio/mid"
       || m === "application/x-midi") return MIDI;
+  if (m === "application/zip" || m === "application/x-zip-compressed") return ZIP;
   if (m.startsWith("image/")) return IMAGE;
   if (m === "audio/mpeg" || m === "audio/mp4" || m === "audio/ogg"
       || m === "audio/flac" || m === "audio/x-wav" || m === "audio/wav"
@@ -55,6 +58,7 @@ function byMime(mime) {
 }
 
 const EXT = {
+  zip: ZIP,
   mid: MIDI, midi: MIDI, rmi: MIDI, xmf: MIDI, mxmf: MIDI,
   png: IMAGE, jpg: IMAGE, jpeg: IMAGE, webp: IMAGE, gif: IMAGE, bmp: IMAGE,
   heic: IMAGE, heif: IMAGE, avif: IMAGE, wbmp: IMAGE,
@@ -98,7 +102,7 @@ function sniff(name, declaredMime, head) {
 }
 
 root.TengokSniffer = {
-  MIDI: MIDI, IMAGE: IMAGE, AUDIO: AUDIO, VIDEO: VIDEO, TEXT: TEXT, HEX: HEX,
+  ZIP: ZIP, MIDI: MIDI, IMAGE: IMAGE, AUDIO: AUDIO, VIDEO: VIDEO, TEXT: TEXT, HEX: HEX,
   byMagic: byMagic, byMime: byMime, byExtension: byExtension,
   looksLikeText: looksLikeText, sniff: sniff,
 };
