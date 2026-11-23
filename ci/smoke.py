@@ -224,6 +224,15 @@ if not all(0 <= cx - sx <= vw for sx, cx, vw in follows):
     print("playhead placed outside the viewport:", follows)
     sys.exit(1)
 shot("05b-midi-follow")
+back()
+
+# The game camera is precomputed before play: zoom out instead of jumping
+# sideways, and only ever move during a no-press gap. The two-phrase song
+# has one real gap (phrase 1 ends ~2.5 s, phrase 2 starts 8 s), so its plan
+# is 2 segments, 1 glide; each phrase is narrow, so keys stay at the 44dp
+# default and the board stays pannable for the pan-vs-strike proof.
+tap("MIDI: two phrases, camera glide")
+need("MIDI format 0")
 
 # ---- game mode: falling notes, wait-for-me freeze, tap the right key ----
 def keymap_from(out):
@@ -241,6 +250,14 @@ def vxkwd_from(out):
     # screen width, viewport offset, white-key width in dp: freshest geometry line
     m = re.findall(r"\| w=(\d+) h=\d+ loc=\d+,\d+ kb=\d+ lo=\d+ hi=\d+ vx=(-?\d+) kwd=(\d+)", out)
     return (int(m[-1][2]), int(m[-1][1]), int(m[-1][0])) if m else None
+
+def camera_from(out):
+    # the precomputed camera plan: (segments, groups, glides, minWhiteDp,
+    # framesBelow44, framesBelow32) from the freshest CAMERA line
+    m = re.findall(
+        r"TENGOK-GAME-CAMERA segments=(\d+) groups=(\d+) glides=(\d+) "
+        r"minWhiteDp=(\d+) below44dp=(\d+) below32dp=(\d+)", out)
+    return tuple(int(v) for v in m[-1]) if m else None
 
 def pan_vs_strike_proof(pitch, keymap, failshot):
     # Phone report: keys squeezed to a few millimetres. Two proofs in one:
@@ -302,6 +319,13 @@ if ready is None or not keymap:
     print("game never became ready or keyboard geometry missing:", ready, len(keymap))
     sys.exit(1)
 print("game ready, track", ready, "keys:", len(keymap))
+cam = camera_from(out)
+if not cam or cam[:3] != (2, 2, 1) or cam[3] != 44 or cam[4] != 0:
+    shot("FAILED-midi-game-camera")
+    print("camera plan for the two-phrase song wrong "
+          "(want segments=2 groups=2 glides=1 minWhiteDp=44 below44dp=0):", cam)
+    sys.exit(1)
+print("camera plan: 2 phrases, 1 gap glide, keys at the 44dp default:", cam)
 # zero judged notes is zero evidence: the score line must start unranked,
 # not award the top letter for nothing
 need("perfect 0")
@@ -418,6 +442,32 @@ if (not score or int(score.group(1)) + int(score.group(2)) != 3
           score.group(0) if score else None)
     sys.exit(1)
 print("game round judged all three strikes:", score.group(0))
+# Gap-glide proof: after the last phrase-1 strike the clock plays through
+# the ~5 s rest. The camera must move ONLY inside that gap and land with
+# the next phrase's first key on screen (vx settles at the phrase-2 frame).
+pitch = None
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    if re.search(r"TENGOK-GAME-WAIT pitch=79\b", out):
+        pitch = 79
+        break
+    time.sleep(0.5)
+if pitch != 79 or 79 not in keymap:
+    shot("FAILED-midi-game-glide")
+    print("game never waited for the phrase-2 entrance (pitch 79):", pitch)
+    sys.exit(1)
+gk = vxkwd_from(out)
+x, y = keymap[79]
+if gk is None or gk[1] < 100 or not (0 < x < gk[2]):
+    shot("FAILED-midi-game-glide")
+    print("camera did not glide to phrase 2 during the gap:",
+          "vx:", gk[1] if gk else None, "pitch-79 key x:", x, "screen w:", gk[2] if gk else None)
+    sys.exit(1)
+print("camera glided inside the gap: vx settled at", gk[1],
+      "with the phrase-2 key on screen at x =", x)
 shot("05c-midi-game")
 tap("exit game", exact=True)
 need("MIDI format 0")
@@ -456,6 +506,13 @@ if ready is None or not keymap:
     shot("FAILED-midi-game-chord")
     print("chord game never became ready:", ready, len(keymap))
     sys.exit(1)
+cam = camera_from(out)
+if not cam or cam[:3] != (1, 1, 0) or cam[3] != 44:
+    shot("FAILED-midi-game-chord")
+    print("camera plan for the chord song wrong "
+          "(want segments=1 groups=1 glides=0 minWhiteDp=44):", cam)
+    sys.exit(1)
+print("chord camera plan: one dense segment, no glides:", cam)
 tap("wait for me: off", exact=True)  # toggles wait mode ON
 adb("shell", "logcat", "-c")
 tap("play", exact=True)
@@ -619,6 +676,13 @@ if not notes_line or notes_line.group(1) != "3" or notes_line.group(4) != "0":
     print("game notes diagnostic missing or wrong:", notes_line)
     sys.exit(1)
 print("empty-lane hint announced the 12 s entrance:", hint, "notes:", notes_line.groups())
+cam = camera_from(out)
+if not cam or cam[:3] != (2, 2, 1) or cam[3] != 44:
+    shot("FAILED-midi-game-late")
+    print("camera plan for the late-entrance pad wrong "
+          "(want segments=2 groups=2 glides=1 minWhiteDp=44):", cam)
+    sys.exit(1)
+print("late-entrance camera plan: 2 segments, 1 glide for the 16 s rest:", cam)
 need("song timeline")  # the horizontal timeline, like normal playback
 need("/ 0:32")
 shot("05d-midi-game-hint")  # the hint text is canvas-drawn; this proves the pixels

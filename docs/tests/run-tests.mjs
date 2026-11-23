@@ -217,9 +217,194 @@ test("keywindow: black key geometry and pitch hit-test", () => {
   const kw = new G.KeyWindow(60, 72, 400);
   assert.equal(G.isBlack(61), true);
   assert.equal(G.isBlack(60), false);
-  assert.equal(kw.pitchAt(kw.centerPx(60)), 60);
-  assert.equal(kw.pitchAt(kw.centerPx(61)), 61); // black key wins its strip
-  assert.equal(kw.pitchAt(-5), -1);
+  assert.equal(kw.pitchAt(kw.centerPx(60), true), 60);
+  assert.equal(kw.pitchAt(kw.centerPx(61), true), 61); // black key wins its strip
+  assert.equal(kw.pitchAt(kw.centerPx(61), false), 62); // but only where drawn
+  assert.equal(kw.pitchAt(-5, true), -1);
+});
+
+test("keywindow: width override only zooms out", () => {
+  const kw = new G.KeyWindow(21, 108, 360, 30);
+  assert.equal(kw.whiteW, 30);
+  const wider = new G.KeyWindow(21, 108, 360, 99999);
+  assert.equal(wider.whiteW, G.MIN_WHITE_PX);
+});
+
+test("keywindow: center taps always hit their own key, even shrunk", () => {
+  for (const w of [44, 30, 28]) {
+    const kw = new G.KeyWindow(48, 83, 800, w);
+    assert.equal(kw.whiteW, w);
+    for (let p = 48; p <= 83; p++) {
+      const c = kw.centerPx(p);
+      if (G.isBlack(p)) {
+        assert.equal(kw.pitchAt(c, true), p, `black ${p} at ${w}`);
+        assert.equal(kw.pitchAt(c, false), p + 1, `under black ${p} at ${w}`);
+      } else {
+        assert.equal(kw.pitchAt(c, true), p, `white ${p} at ${w}`);
+        assert.equal(kw.pitchAt(c, false), p, `white low ${p} at ${w}`);
+      }
+    }
+  }
+});
+
+test("keywindow: containment matches the drawn keys (arbitration rejected)", () => {
+  // Why hit-testing stays strict containment: nearest-center arbitration
+  // shrinks every black key's target from its drawn rect (0.62*whiteW) to
+  // half a white width, so a tap ON the drawn black near its edge scores
+  // the white beside it. Containment never disagrees with what is drawn -
+  // and the pressed key's dim must match what the tap scores. Pin the
+  // measured disagreement: blackW - whiteW/2 px per black key.
+  const kw = new G.KeyWindow(48, 83, 800, 30);
+  const nearestCenter = (x) => {
+    let best = -1, bd = Infinity;
+    for (let p = kw.lo; p <= kw.hi; p++) {
+      const d = Math.abs(kw.centerPx(p) - x);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  };
+  let disagree = 0, blacks = 0;
+  for (let p = 48; p <= 83; p++) {
+    if (!G.isBlack(p)) continue;
+    blacks++;
+    const bc = kw.centerPx(p), half = kw.whiteW / 2;
+    for (let x = bc - half + 0.01; x < bc + half; x += 0.25) {
+      if (nearestCenter(x) !== kw.pitchAt(x, true)) disagree++;
+    }
+  }
+  assert.ok(blacks > 0);
+  // 30px keys: drawn black 18.6px, arbitrated 15px -> ~3.6px of disagreement
+  const perBlack = Math.floor((kw.blackW() - kw.whiteW / 2) / 0.25);
+  assert.ok(perBlack > 0);
+  assert.ok(Math.abs(disagree - perBlack * blacks) <= blacks * 2,
+      `arbitration disagrees ~${perBlack * blacks} samples, got ${disagree}`);
+});
+
+/* ---- CameraPlan: zoom out before moving, move only in no-press gaps ----
+ * Mirrors CameraPlanTest.java exactly: 800px viewport, 44px default width. */
+const CN = (pitch, startSec, endSec) => ({ pitch, startSec, endSec });
+
+test("cameraplan: empty song is static default", () => {
+  const p = new G.CameraPlan([], 48, 83, 800, 44);
+  assert.equal(p.segmentCount, 0);
+  assert.deepEqual(p.valueAt(0), [0, 44]);
+  assert.deepEqual(p.valueAt(12345), [0, 44]);
+});
+
+test("cameraplan: single passage keeps default width, one static frame", () => {
+  const p = new G.CameraPlan([CN(60, 1, 2), CN(64, 2, 3)], 48, 83, 800, 44);
+  assert.equal(p.segmentCount, 1);
+  assert.equal(p.groups.length, 1);
+  assert.equal(p.glides.length, 0);
+  assert.equal(p.minWhiteW, 44);
+  assert.equal(p.framesBelow(44), 0);
+  const kw = new G.KeyWindow(48, 83, 800, 44);
+  assert.ok(Math.abs(p.valueAt(1500)[0] - kw.viewportCentering(60, 64)) < 0.001);
+  assert.deepEqual(p.valueAt(0), p.valueAt(99999));
+});
+
+test("cameraplan: long gap glides inside the gap only", () => {
+  const p = new G.CameraPlan([CN(48, 0, 1), CN(83, 10, 11)], 48, 83, 800, 44);
+  assert.equal(p.segmentCount, 2);
+  assert.equal(p.groups.length, 2);
+  assert.equal(p.glides.length, 1);
+  const g = p.glides[0];
+  // busy segments [-300,1150] and [9700,11150]: arrive 500ms early,
+  // at least a 320ms sweep, never starting before the first segment ends
+  assert.equal(g.endMs, 9700 - G.CAM_ARRIVE_EARLY_MS);
+  assert.ok(g.endMs - g.startMs >= G.CAM_GLIDE_MIN_MS - 0.001);
+  assert.ok(g.startMs >= 1150 - 0.001);
+  const kw = new G.KeyWindow(48, 83, 800, 44);
+  const vxA = kw.viewportCentering(48, 48);
+  const vxB = kw.viewportCentering(83, 83);
+  assert.ok(Math.abs(p.valueAt(5000)[0] - vxA) < 0.001);
+  assert.ok(Math.abs(p.valueAt(9500)[0] - vxB) < 0.001);
+  const mid = p.valueAt((g.startMs + g.endMs) / 2)[0];
+  assert.ok(Math.abs(mid - (vxA + vxB) / 2) < 0.5); // smoothstep midpoint
+  let prev = vxA; // monotonic: the board never doubles back
+  for (let t = g.startMs; t <= g.endMs; t += 20) {
+    const v = p.valueAt(t)[0];
+    assert.ok(v >= prev - 0.001, `monotonic at ${t}`);
+    prev = v;
+  }
+});
+
+test("cameraplan: short gap merges into one zoomed frame", () => {
+  // 550ms gap: too short for a 500ms arrival buffer plus a 320ms sweep,
+  // so instead of moving, the camera zooms out to see both
+  const p = new G.CameraPlan([CN(48, 0, 1), CN(83, 2, 3)], 48, 83, 800, 44);
+  assert.equal(p.segmentCount, 2);
+  assert.equal(p.groups.length, 1);
+  assert.equal(p.glides.length, 0);
+  const fitW = 800 / 21; // the whole three-octave board at once
+  assert.ok(Math.abs(p.valueAt(0)[1] - fitW) < 0.001);
+  assert.ok(Math.abs(p.valueAt(99999)[1] - fitW) < 0.001);
+  assert.ok(Math.abs(p.minWhiteW - fitW) < 0.001);
+  assert.equal(p.framesBelow(44), 1); // honestly below the comfort size
+  assert.equal(p.framesBelow(38), 0);
+  const kw = new G.KeyWindow(48, 83, 800, 1);
+  kw.whiteW = fitW;
+  assert.ok(kw.rangeVisible(48, 83, p.valueAt(1000)[0]));
+});
+
+test("cameraplan: dense no-gap passage is a whole-passage fit", () => {
+  const walk = [];
+  for (let i = 0; i < 36; i++) walk.push(CN(48 + i, i * 0.25, i * 0.25 + 0.25));
+  const p = new G.CameraPlan(walk, 48, 83, 800, 44);
+  assert.equal(p.segmentCount, 1);
+  assert.equal(p.glides.length, 0);
+  const fitW = 800 / 21;
+  assert.ok(Math.abs(p.minWhiteW - fitW) < 0.001);
+  const first = p.valueAt(0);
+  for (let t = 0; t <= 9500; t += 250) {
+    assert.deepEqual(p.valueAt(t), first, `static at ${t}`);
+  }
+  const kw = new G.KeyWindow(48, 83, 800, 1);
+  kw.whiteW = fitW;
+  assert.ok(kw.rangeVisible(48, 83, first[0]));
+});
+
+test("cameraplan: held pad keeps the whole union visible", () => {
+  const p = new G.CameraPlan([
+    CN(48, 0, 10), CN(76, 2, 2.5), CN(79, 4, 4.5), CN(83, 6, 6.5),
+  ], 48, 83, 800, 44);
+  assert.equal(p.segmentCount, 1);
+  assert.equal(p.glides.length, 0);
+  const kw = new G.KeyWindow(48, 83, 800, 1);
+  kw.whiteW = p.valueAt(3000)[1];
+  assert.ok(kw.rangeVisible(48, 83, p.valueAt(3000)[0]));
+});
+
+test("cameraplan: glides never overlap busy time", () => {
+  const song = [CN(48, 0, 1), CN(83, 10, 11), CN(60, 20, 21)];
+  const p = new G.CameraPlan(song, 48, 83, 800, 44);
+  assert.equal(p.groups.length, 3);
+  assert.equal(p.glides.length, 2);
+  for (const g of p.glides) {
+    for (const n of song) {
+      const b0 = n.startSec * 1000 - G.CAM_BUSY_LEAD_MS;
+      const b1 = n.endSec * 1000 + G.CAM_BUSY_TAIL_MS;
+      assert.ok(g.endMs <= b0 || g.startMs >= b1,
+          `glide [${g.startMs},${g.endMs}] overlaps busy [${b0},${b1}]`);
+    }
+  }
+});
+
+test("cameraplan: zoom rides the glide", () => {
+  // a narrow phrase, then a cluster spanning the whole board: the gap
+  // glide carries the zoom change smoothly, inside the gap
+  const song = [CN(60, 0, 1)];
+  for (let i = 0; i < 36; i++) song.push(CN(48 + i, 10, 11));
+  const p = new G.CameraPlan(song, 48, 83, 800, 44);
+  assert.equal(p.groups.length, 2);
+  assert.equal(p.glides.length, 1);
+  const g = p.glides[0];
+  const wA = p.valueAt(g.startMs - 1)[1];
+  const wB = p.valueAt(g.endMs + 1)[1];
+  assert.equal(wA, 44);
+  assert.ok(Math.abs(wB - 800 / 21) < 0.01, "the wide cluster shrinks the keys");
+  const midW = p.valueAt((g.startMs + g.endMs) / 2)[1];
+  assert.ok(midW < wA && midW > wB, "zoom interpolates mid-glide");
 });
 test("keywindow: viewport centering clamps to the board", () => {
   const kw = new G.KeyWindow(21, 108, 360);

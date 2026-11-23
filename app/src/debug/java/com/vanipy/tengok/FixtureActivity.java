@@ -36,6 +36,7 @@ public class FixtureActivity extends Activity {
         addButton(column, "MIDI: long walk, auto-follow", "longwalk.mid", FixtureActivity::longWalkMid);
         addButton(column, "MIDI: late entrance and gap", "latepad.mid", FixtureActivity::latePadMid);
         addButton(column, "MIDI: chord song", "chord.mid", FixtureActivity::chordMid);
+        addButton(column, "MIDI: two phrases, camera glide", "twophrase.mid", FixtureActivity::twoPhraseMid);
         addButton(column, "MIDI: corrupt file", "corrupt.mid", FixtureActivity::corruptMid);
         addButton(column, "Text: hello", "hello.txt", FixtureActivity::helloTxt);
         addButton(column, "Hex: random blob", "blob.bin", FixtureActivity::blob);
@@ -104,6 +105,39 @@ public class FixtureActivity extends Activity {
         event(track, 0, 0x80, 40, 0);
         event(track, 480, 0x90, 38, 96); // D2 alone, after the chord
         event(track, 480, 0x80, 38, 0);
+        metaEnd(track, 0);
+        return smf(0, 480, new byte[][]{track.toByteArray()});
+    }
+
+    /**
+     * Format 0: two three-note phrases a wide jump apart with a 5 s rest
+     * between them - the planned camera's gap glide, end to end. Phrase one
+     * is C4 E4 G4 at 0, 1, 2 s; phrase two is G5 A5 B5 at 8, 9, 10 s. The
+     * board must sit still through each phrase, then sweep once during the
+     * rest while nothing is pressed or held.
+     */
+    static byte[] twoPhraseMid() throws IOException {
+        ByteArrayOutputStream track = new ByteArrayOutputStream();
+        metaText(track, 0, 0x03, "two phrases");
+        metaTempo(track, 0, 500000); // 120 bpm: a quarter (480 ticks) is 0.5 s
+        metaTimeSig(track, 0, 4, 4);
+        event(track, 0, 0xC0, 0, -1); // program 0: acoustic grand
+        int[] pitches = {60, 64, 67, 79, 81, 83};
+        // delta-timed writing: quarters land at 0,1,2,8,9,10 s and last 0.5 s
+        java.util.List<long[]> ev = new java.util.ArrayList<>(); // tick, on/off, pitch
+        for (int i = 0; i < pitches.length; i++) {
+            long on = (i < 3 ? i * 960L : 7680L + (i - 3) * 960L);
+            ev.add(new long[]{on, 1, pitches[i]});
+            ev.add(new long[]{on + 480, 0, pitches[i]});
+        }
+        java.util.Collections.sort(ev, (a, b) -> Long.compare(a[0], b[0]));
+        long clock = 0;
+        for (long[] e : ev) {
+            long delta = e[0] - clock;
+            clock = e[0];
+            if (e[1] == 1) event(track, delta, 0x90, (int) e[2], 96);
+            else if (e[1] == 0) event(track, delta, 0x80, (int) e[2], 0);
+        }
         metaEnd(track, 0);
         return smf(0, 480, new byte[][]{track.toByteArray()});
     }
