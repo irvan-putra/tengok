@@ -123,6 +123,35 @@ public class CameraPlanTest {
     }
 
     @Test
+    public void identicalNeighborFramesDoNotShiftThePlan() {
+        // Quiet phrase, the SAME quiet phrase again, a wide passage, the
+        // quiet phrase once more: the identical neighbors share no glide,
+        // so the glide list is shorter than the group list. A valueAt that
+        // indexes groups by glide position serves the narrow frame for the
+        // wide passage - the phone report behind this test: a warm-pad part
+        // with exactly this shape never zoomed out, and its wide notes
+        // landed on off-screen keys.
+        CameraPlan p = new CameraPlan(notes(
+                note(60, 1.0, 2.0), note(64, 1.0, 2.0),
+                note(60, 10.0, 11.0), note(64, 10.0, 11.0),
+                note(48, 20.0, 21.0), note(83, 20.0, 21.0),
+                note(60, 30.0, 31.0), note(64, 30.0, 31.0)), LO, HI, W, DEF);
+        assertEquals(4, p.segmentCount());
+        assertEquals(4, p.groupCount());
+        assertEquals(2, p.glideCount()); // no glide between the identical frames
+        float fitW = W / 21f; // the wide passage zooms out to fit
+        assertEquals(DEF, at(p, 1500)[1], 0.001f);   // first quiet phrase
+        assertEquals(DEF, at(p, 12000)[1], 0.001f);  // rest before the glide
+        assertEquals(fitW, at(p, 20000)[1], 0.001f); // the wide passage itself
+        assertEquals(fitW, at(p, 25000)[1], 0.001f); // held until the glide back
+        assertEquals(DEF, at(p, 31000)[1], 0.001f);  // quiet tail
+        assertEquals(DEF, at(p, 99999)[1], 0.001f);
+        KeyWindow kwFit = KeyWindow.exact(LO, HI, W, fitW);
+        assertEquals(kwFit.viewportCentering(48, 83), at(p, 20000)[0], 0.001f);
+        assertTrue(kwFit.rangeVisible(48, 83, at(p, 20000)[0]));
+    }
+
+    @Test
     public void denseNoGapPassageIsAWholePassageFit() {
         // 36 back-to-back chromatic eighth notes: no gap anywhere, so the
         // whole passage is one static zoomed frame and the board never moves

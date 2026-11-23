@@ -34,6 +34,7 @@ public class FixtureActivity extends Activity {
         addButton(column, "MIDI: C major scale", "scale.mid", FixtureActivity::scaleMid);
         addButton(column, "MIDI: two-track song, tempo change", "song.mid", FixtureActivity::songMid);
         addButton(column, "MIDI: long walk, auto-follow", "longwalk.mid", FixtureActivity::longWalkMid);
+        addButton(column, "MIDI: quiet pad, wide middle", "padshape.mid", FixtureActivity::padShapeMid);
         addButton(column, "MIDI: late entrance and gap", "latepad.mid", FixtureActivity::latePadMid);
         addButton(column, "MIDI: chord song", "chord.mid", FixtureActivity::chordMid);
         addButton(column, "MIDI: two phrases, camera glide", "twophrase.mid", FixtureActivity::twoPhraseMid);
@@ -191,6 +192,46 @@ public class FixtureActivity extends Activity {
             p += step;
             if (p >= 60 || p <= 36) step = -step;
         }
+        metaEnd(track, 0);
+        return smf(0, 480, new byte[][]{track.toByteArray()});
+    }
+
+    /**
+     * Format 0: the camera-plan shape from the 0.5.0 phone zoom-out report -
+     * a narrow phrase, the SAME narrow phrase again (identical frames share
+     * no glide), then a dense passage spanning the board, then the narrow
+     * phrase once more. The wide passage must zoom out to ~19dp keys and the
+     * camera must come back to 44dp for the tail; with the old glide-indexed
+     * valueAt it stayed at the narrow frame the whole song.
+     */
+    static byte[] padShapeMid() throws IOException {
+        ByteArrayOutputStream track = new ByteArrayOutputStream();
+        metaText(track, 0, 0x03, "padshape");
+        metaTempo(track, 0, 500000); // 120 bpm: a quarter (480 ticks) is 0.5 s
+        metaTimeSig(track, 0, 4, 4);
+        event(track, 0, 0xC0, 89, -1); // warm pad
+        // narrow phrase at 0 s and again at 8 s: identical frames, no glide
+        event(track, 0, 0x90, 60, 90);
+        event(track, 240, 0x80, 60, 0);
+        event(track, 0, 0x90, 61, 90);
+        event(track, 240, 0x80, 61, 0);       // now at tick 480 = 0.5 s
+        event(track, 7200, 0x90, 60, 90);     // 8.0 s
+        event(track, 240, 0x80, 60, 0);
+        event(track, 0, 0x90, 61, 90);
+        event(track, 240, 0x80, 61, 0);       // now at tick 8160 = 8.5 s
+        // dense walk across the board at 12 s: sixteen eighths, one segment
+        int p = 48, step = 5;
+        for (int i = 0; i < 16; i++) {
+            event(track, i == 0 ? 3360 : 0, 0x90, p, 90); // first at 12.0 s
+            event(track, 240, 0x80, p, 0);
+            p += step;
+            if (p >= 83 || p <= 48) step = -step;
+        }                                     // now at tick 15360 = 16.0 s
+        // narrow tail at 20 s
+        event(track, 3840, 0x90, 60, 90);
+        event(track, 240, 0x80, 60, 0);
+        event(track, 0, 0x90, 61, 90);
+        event(track, 240, 0x80, 61, 0);
         metaEnd(track, 0);
         return smf(0, 480, new byte[][]{track.toByteArray()});
     }

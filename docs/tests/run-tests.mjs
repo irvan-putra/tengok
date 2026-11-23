@@ -347,6 +347,30 @@ test("cameraplan: short gap merges into one zoomed frame", () => {
   assert.ok(kw.rangeVisible(48, 83, p.valueAt(1000)[0]));
 });
 
+test("cameraplan: identical neighbor frames do not shift the plan", () => {
+  // Mirrors identicalNeighborFramesDoNotShiftThePlan in CameraPlanTest.java:
+  // identical neighbors share no glide, so valueAt must not index groups by
+  // glide position - that bug kept a warm-pad part from ever zooming out.
+  const p = new G.CameraPlan([
+    CN(60, 1, 2), CN(64, 1, 2),
+    CN(60, 10, 11), CN(64, 10, 11),
+    CN(48, 20, 21), CN(83, 20, 21),
+    CN(60, 30, 31), CN(64, 30, 31)], 48, 83, 800, 44);
+  assert.equal(p.segmentCount, 4);
+  assert.equal(p.groups.length, 4);
+  assert.equal(p.glides.length, 2); // no glide between the identical frames
+  const fitW = 800 / 21;
+  assert.equal(p.valueAt(1500)[1], 44);
+  assert.equal(p.valueAt(12000)[1], 44);
+  assert.ok(Math.abs(p.valueAt(20000)[1] - fitW) < 0.001);
+  assert.ok(Math.abs(p.valueAt(25000)[1] - fitW) < 0.001);
+  assert.equal(p.valueAt(31000)[1], 44);
+  assert.equal(p.valueAt(99999)[1], 44);
+  const kw = new G.KeyWindow(48, 83, 800, 1);
+  kw.whiteW = fitW;
+  assert.ok(Math.abs(p.valueAt(20000)[0] - kw.viewportCentering(48, 83)) < 0.001);
+});
+
 test("cameraplan: dense no-gap passage is a whole-passage fit", () => {
   const walk = [];
   for (let i = 0; i < 36; i++) walk.push(CN(48 + i, i * 0.25, i * 0.25 + 0.25));

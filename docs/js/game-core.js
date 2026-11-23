@@ -335,23 +335,24 @@ class CameraPlan {
   /* the planned camera at a song time: [viewport px, white-key width px] -
    * a pure function of song time, so pause, scrub and freezes need no
    * special cases; glides animate with a smoothstep, zero speed both ends */
+  /* Identical neighbor frames share no glide, so glide i does NOT
+   * correspond to group i: carry the active frame through the glide list
+   * instead of indexing groups by glide position. Mirrors CameraPlan.java. */
   valueAt(songMs) {
     if (this.groups.length === 0) return [0, this.defaultWhiteW];
-    for (let i = 0; i < this.glides.length; i++) {
-      const g = this.glides[i];
-      if (songMs < g.startMs) {
-        const grp = this.groups[i];
-        return [grp.vx, grp.whiteW];
-      }
+    let vx = this.groups[0].vx, w = this.groups[0].whiteW;
+    for (const g of this.glides) {
+      if (songMs < g.startMs) return [vx, w];
       if (songMs <= g.endMs) {
         const u = g.endMs <= g.startMs ? 1 : (songMs - g.startMs) / (g.endMs - g.startMs);
         const e = u * u * (3 - 2 * u);
         return [g.fromVx + (g.toVx - g.fromVx) * e,
             g.fromW + (g.toW - g.fromW) * e];
       }
+      vx = g.toVx;
+      w = g.toW;
     }
-    const last = this.groups[this.groups.length - 1];
-    return [last.vx, last.whiteW];
+    return [vx, w];
   }
 
   /* frames whose keys are narrower than wPx (the honest small-key report) */
