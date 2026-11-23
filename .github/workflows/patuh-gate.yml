@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   source-gate:
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f3cb449a57f9ce66af74cf83e7af6bd6dddb95c9
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@4e07bf7f13cf57ddbfa686908a707821387b9cf9
     with:
       app: tengok
       published: false
@@ -40,7 +40,7 @@ jobs:
   candidate-bytes-gate:
     if: github.event_name == 'workflow_dispatch'
     needs: build-debug-apk
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f3cb449a57f9ce66af74cf83e7af6bd6dddb95c9
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@4e07bf7f13cf57ddbfa686908a707821387b9cf9
     with:
       app: tengok
       published: false
@@ -48,7 +48,7 @@ jobs:
 
   verify-live-release:
     if: github.event_name == 'workflow_dispatch'
-    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@f3cb449a57f9ce66af74cf83e7af6bd6dddb95c9
+    uses: irvan-putra/patuh/.github/workflows/release-gate.yml@4e07bf7f13cf57ddbfa686908a707821387b9cf9
     with:
       app: tengok
       published: true
