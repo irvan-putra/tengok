@@ -28,6 +28,11 @@ function runCleanups() {
 }
 
 const ctx = {
+  openArchiveFile: file => {
+    // Keep one expanded member, rather than accumulating decompressed files.
+    entries = entries.filter(e => !e.fromZip);
+    addFiles([file], true);
+  },
   synth: synth,
   viewArea: viewArea,
   onCleanup: (fn) => cleanups.push(fn),
@@ -40,12 +45,12 @@ async function kindOf(file) {
   return S.sniff(file.name, file.type, head);
 }
 
-async function addFiles(list) {
+async function addFiles(list, fromZip = false) {
   const files = Array.from(list);
   if (files.length === 0) return;
   for (const file of files) {
     try {
-      entries.push({ file: file, kind: await kindOf(file) });
+      entries.push({ file: file, kind: await kindOf(file), fromZip });
     } catch (e) {
       entries.push({ file: file, kind: S.HEX });
     }
@@ -124,7 +129,8 @@ function showEntry(index, forceKind) {
 
   switch (kind) {
     case S.ZIP:
-      root.TengokZip.show(viewArea, file, ctx);
+      if (entries[index].fromZip) V.showHex(viewArea,file,ctx,"nested ZIP (opening disabled)");
+      else root.TengokZip.show(viewArea, file, ctx);
       break;
     case S.MIDI:
       if (file.size > MAX_MIDI_BYTES) {

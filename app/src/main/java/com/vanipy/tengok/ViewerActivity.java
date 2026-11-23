@@ -28,6 +28,10 @@ public class ViewerActivity extends Activity {
     private static final String TAG = "tengok";
 
     private Source source;
+    private Source archiveParent;
+    private byte[] archiveBytes;
+    private boolean zipBusy;
+
     private Sniffer.Kind kind;
     private byte[] head;
     private byte[] buffered;
@@ -66,7 +70,7 @@ public class ViewerActivity extends Activity {
         back.setTextSize(16);
         back.setTextColor(0xFFFFFFFF);
         back.setPadding(Ui.dp(this, 8), 0, Ui.dp(this, 12), 0);
-        back.setOnClickListener(v -> finish());
+        back.setOnClickListener(v -> onBackPressed());
         bar.addView(back);
 
         titleView = new TextView(this);
@@ -177,6 +181,7 @@ public class ViewerActivity extends Activity {
 
     /** Panel on top, Convert card docked below when the kind has targets. */
     private void addWithConvert(android.view.View panelView, Sniffer.Kind k) {
+        if (archiveParent != null) { content.addView(panelView); return; }
         convertPanel = new ConvertPanel(this, source, k, head);
         android.view.View card = convertPanel.build();
         if (card == null) {
@@ -224,24 +229,34 @@ public class ViewerActivity extends Activity {
         content.addView(loading);
         new Thread(() -> {
             try {
-                java.util.List<ZipIndex.Entry> entries = ZipIndex.parse(source.readAll(Source.MAX_BUFFERED_BYTES));
+                byte[] zipData = source.readAll(Source.MAX_BUFFERED_BYTES);
+                java.util.List<ZipIndex.Entry> entries = ZipIndex.parse(zipData);
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed() || kind != Sniffer.Kind.ZIP) return;
                     content.removeAllViews();
                     LinearLayout column = Ui.column(this);
                     LinearLayout card = Ui.card(this);
                     card.addView(Ui.line(this, "ZIP contents · " + entries.size() + (entries.size() == 1 ? " entry" : " entries")));
-                    card.addView(Ui.muted(this, "Read-only listing. Paths and sizes are declared by the archive, not verified file contents. Nothing is extracted or executed."));
+                    card.addView(Ui.muted(this, "Tap a file to view it in memory. Nothing is written to storage or executed. Entry size and checksum are checked before opening."));
                     if (entries.isEmpty()) card.addView(Ui.muted(this, "This ZIP is empty."));
-                    for (ZipIndex.Entry entry : entries) {
+                    for (int entryIndex = 0; entryIndex < entries.size(); entryIndex++) {
+                        ZipIndex.Entry entry = entries.get(entryIndex);
+                        final int selectedIndex = entryIndex;
                         TextView name = Ui.line(this, entry.name);
                         name.setTypeface(Typeface.MONOSPACE);
                         name.setTextIsSelectable(true);
                         name.setPadding(0, Ui.dp(this, 14), 0, 0);
+                        if (!entry.directory) {
+                            name.setText("Open: " + entry.name);
+                            name.setTextColor(0xFF1F2A9C);
+                            name.setMinHeight(Ui.dp(this, 48));
+                            name.setTextIsSelectable(false);
+                            name.setOnClickListener(v -> openZipEntry(zipData, selectedIndex, entry));
+                        }
                         card.addView(name);
                         card.addView(Ui.muted(this, entry.directory ? "Folder" : entry.size + " bytes · packed " + entry.packed + " bytes" + (entry.encrypted ? " · encrypted" : "")));
                     }
-                    card.addView(Ui.muted(this, "Limits: 32 MB ZIP, 2,000 entries. No extraction, password opening, ZIP64 or split archives. Encrypted entries can be listed only when their directory is readable."));
+                    card.addView(Ui.muted(this, "Limits: 32 MB ZIP, 2,000 entries. Open stored/deflated files up to 16 MB and 100:1 compression. No password opening, ZIP64, split archives or nested ZIP opening. Nothing is saved to storage."));
                     android.widget.Button raw = new android.widget.Button(this);
                     raw.setText("Show raw bytes");
                     raw.setOnClickListener(v -> showKind(Sniffer.Kind.HEX));
@@ -258,6 +273,46 @@ public class ViewerActivity extends Activity {
                 });
             }
         }, "zip-list").start();
+    }
+
+    private void openZipEntry(byte[] data, int index, ZipIndex.Entry entry) {
+        if (zipBusy) return;
+        zipBusy = true;
+        new Thread(() -> {
+            try {
+                byte[] bytes = ZipIndex.open(data, index);
+                runOnUiThread(() -> {
+                    zipBusy = false;
+                    if (isFinishing() || isDestroyed() || kind != Sniffer.Kind.ZIP) return;
+                    archiveParent = source;
+                    archiveBytes = data;
+                    source = new Source.BytesSource(entry.name, bytes);
+                    buffered = bytes;
+                    titleView.setText(entry.name);
+                    try { head = source.head(8192); } catch (IOException impossible) { return; }
+                    Sniffer.Kind target = Sniffer.sniff(entry.name, null, head);
+                    // Keep at most one expanded file in memory. Nested ZIPs remain inspectable as bytes.
+                    showKind(target == Sniffer.Kind.ZIP || target == Sniffer.Kind.VIDEO ? Sniffer.Kind.HEX : target);
+                });
+            } catch (IOException e) {
+                runOnUiThread(() -> {
+                    zipBusy = false;
+                    if (!isFinishing() && !isDestroyed()) new AlertDialog.Builder(this)
+                            .setTitle("Cannot open ZIP entry").setMessage(e.getMessage())
+                            .setPositiveButton("Close", null).show();
+                });
+            }
+        }, "zip-open").start();
+    }
+
+    @Override public void onBackPressed() {
+        if (archiveParent != null) {
+            releasePlayers();
+            source = archiveParent; archiveParent = null; archiveBytes = null;
+            buffered = null; titleView.setText(source.name);
+            try { head = source.head(8192); } catch (IOException ignored) { }
+            showKind(Sniffer.Kind.ZIP);
+        } else super.onBackPressed();
     }
 
     private void showText() {
@@ -315,7 +370,7 @@ public class ViewerActivity extends Activity {
         sb.append("Name: ").append(source.name).append('\n');
         sb.append("Size: ").append(Meta.humanSize(source.size)).append('\n');
         sb.append("Shown as: ").append(kind.name().toLowerCase(java.util.Locale.ROOT)).append('\n');
-        String declared = getIntent().getType();
+        String declared = archiveParent == null ? getIntent().getType() : null;
         sb.append("Declared type: ").append(declared == null ? "none" : declared).append('\n');
         // The dialog and the background hash both run far from the file parser;
         // any failure here must degrade to a readable note, never a crash.

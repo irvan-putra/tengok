@@ -71,7 +71,9 @@ public class ImagePanel {
         if (android.os.Build.VERSION.SDK_INT >= 28 && isGif(source.name, head)) {
             try {
                 android.graphics.ImageDecoder.Source src = null;
-                if (source.uri() != null) {
+                if (source instanceof Source.BytesSource) {
+                    src = android.graphics.ImageDecoder.createSource(java.nio.ByteBuffer.wrap(source.readAll(16L * 1024 * 1024)));
+                } else if (source.uri() != null) {
                     src = android.graphics.ImageDecoder.createSource(ctx.getContentResolver(), source.uri());
                 } else if (source.localFile() != null) {
                     src = android.graphics.ImageDecoder.createSource(source.localFile());

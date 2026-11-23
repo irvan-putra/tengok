@@ -548,3 +548,21 @@ test("ZIP: encrypted flag and untrusted path are only displayed metadata", () =>
 });
 
 console.log("\n" + passed + " tests passed");
+
+const {deflateRawSync} = await import("node:zlib");
+function makeZip(data, method=8, name="file.txt") {
+ const packed=method===8?new Uint8Array(deflateRawSync(data)):data;
+ const n=new TextEncoder().encode(name), b=new Uint8Array(30+n.length+packed.length+46+n.length+22),v=new DataView(b.buffer);
+ const end=30+n.length+packed.length, eocd=end+46+n.length;
+ v.setUint32(0,0x04034b50,true);v.setUint16(8,method,true);v.setUint32(14,Z.crc32(data),true);v.setUint32(18,packed.length,true);v.setUint32(22,data.length,true);v.setUint16(26,n.length,true);b.set(n,30);b.set(packed,30+n.length);
+ v.setUint32(end,0x02014b50,true);v.setUint16(end+10,method,true);v.setUint32(end+16,Z.crc32(data),true);v.setUint32(end+20,packed.length,true);v.setUint32(end+24,data.length,true);v.setUint16(end+28,n.length,true);b.set(n,end+46);
+ v.setUint32(eocd,0x06054b50,true);v.setUint16(eocd+8,1,true);v.setUint16(eocd+10,1,true);v.setUint32(eocd+12,46+n.length,true);v.setUint32(eocd+16,end,true);
+ return b;
+}
+async function zipTest(name,fn) {try{await fn();passed++;console.log("PASS "+name);}catch(e){console.error("FAIL "+name+": "+e.message);process.exitCode=1;}}
+await zipTest("ZIP open: stored sample text",async()=>assert.equal(new TextDecoder().decode(await Z.open(sampleZip,0)),"Unggah test file.\nSynthetic content, safe to commit.\n"));
+await zipTest("ZIP open: deflate bytes",async()=>{const data=new TextEncoder().encode("read me safely");assert.deepEqual(await Z.open(makeZip(data),0),data);});
+await zipTest("ZIP open: rejects ratio bomb",async()=>{await assert.rejects(()=>Z.open(makeZip(new Uint8Array(1024*1024)),0),/100:1/);});
+await zipTest("ZIP open: checksum and size mismatches rejected",async()=>{const b=sampleZip.slice();let at=0;const v=new DataView(b.buffer);while(v.getUint32(at,true)!==0x02014b50)at++;b[at+16]^=1;await assert.rejects(()=>Z.open(b,0));});
+await zipTest("ZIP open: encrypted entry rejected",async()=>{const b=sampleZip.slice();let at=0;const v=new DataView(b.buffer);while(v.getUint32(at,true)!==0x02014b50)at++;b[at+8]|=1;await assert.rejects(()=>Z.open(b,0),/Encrypted/);});
+console.log(passed+" total tests passed");
