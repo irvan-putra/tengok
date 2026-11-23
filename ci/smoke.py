@@ -60,8 +60,26 @@ def find(text, exact=False):
     return None
 
 
+def dismiss_anr():
+    # A freshly booted emulator sometimes ANRs Pixel Launcher; the system
+    # dialog then steals the window and the dump shows only "isn't
+    # responding" with "Wait" / "Close app". Tap Wait and let the real app
+    # underneath render. Exact match: tengok itself has no "Wait" button.
+    for n in nodes():
+        if (n.get("text") or "").strip() == "Wait":
+            x, y = center(n["bounds"])
+            adb("shell", "input", "tap", str(x), str(y))
+            time.sleep(2)
+            return True
+    return False
+
+
 def present(text, exact=False):
-    return find(text, exact) is not None
+    if find(text, exact) is not None:
+        return True
+    if dismiss_anr():
+        return find(text, exact) is not None
+    return False
 
 
 def tap(text, exact=False, tries=6):
@@ -72,6 +90,8 @@ def tap(text, exact=False, tries=6):
             adb("shell", "input", "tap", str(x), str(y))
             time.sleep(0.8)
             return
+        if dismiss_anr():
+            continue
         adb("shell", "input", "swipe", "540", "1700", "540", "700", "300")
         time.sleep(1)
     shot("FAILED-" + re.sub(r"\W+", "_", text)[:30])
