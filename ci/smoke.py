@@ -474,6 +474,83 @@ tap("exit game", exact=True)
 need("MIDI format 0")
 back()
 
+# ---- game camera: a dense no-gap passage zooms OUT instead of panning ----
+# The long walk is 80 eighth notes with no rest: one busy segment, so the
+# plan must fit the whole 36..60 walk on screen at once and never move.
+# On this emulator that is 72px keys = 27dp. This is the path 0.5.0 exists
+# for; the fixtures above all stay at the 44dp default and never exercise it.
+tap("MIDI: long walk, auto-follow")
+need("MIDI format 0")
+tap("Game", exact=True)
+time.sleep(2)
+ready = None
+keymap = {}
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.search(r"TENGOK-GAME-READY track=(\d+)", out)
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    if m:
+        ready = m.group(1)
+        if keymap:
+            break
+    time.sleep(0.5)
+if ready is None or not keymap:
+    shot("FAILED-midi-game-zoom")
+    print("walk game never became ready:", ready, len(keymap))
+    sys.exit(1)
+cam = camera_from(out)
+if not cam or cam[:3] != (1, 1, 0) or cam[3] != 27 or cam[4] != 1:
+    shot("FAILED-midi-game-zoom")
+    print("camera plan for the dense walk wrong "
+          "(want segments=1 groups=1 glides=0 minWhiteDp=27 below44dp=1):", cam)
+    sys.exit(1)
+gk = vxkwd_from(out)
+if gk is None or gk[0] != 27:
+    shot("FAILED-midi-game-zoom")
+    print("zoom-out did not reach the keyboard: want kwd=27dp, got:", gk)
+    sys.exit(1)
+print("dense walk zoomed out: kwd", gk[0], "dp, plan:", cam)
+# a tap on a 27dp key must still hit-test and score at the zoomed size
+tap("wait for me: off", exact=True)  # toggles wait mode ON
+adb("shell", "logcat", "-c")
+tap("play", exact=True)
+pitch = None
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    m = re.search(r"TENGOK-GAME-WAIT pitch=(\d+)", out)
+    if m:
+        pitch = int(m.group(1))
+        break
+    time.sleep(0.5)
+if pitch != 36 or 36 not in keymap:
+    shot("FAILED-midi-game-zoom")
+    print("walk game did not wait for the first note (36):", pitch)
+    sys.exit(1)
+x, y = keymap[36]
+if not (0 < x < 1080):
+    shot("FAILED-midi-game-zoom")
+    print("first walk key off screen at zoomed fit:", x)
+    sys.exit(1)
+adb("shell", "logcat", "-c")
+adb("shell", "input", "tap", str(x), str(y))
+time.sleep(1.2)
+out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+strikes = re.findall(r"TENGOK-GAME-STRIKE pitch=(\d+) grade=(\d+)", out)
+if not any(p_ == "36" and g in ("1", "2") for p_, g in strikes):
+    shot("FAILED-midi-game-zoom")
+    print("tap on the zoomed-out key did not score:", strikes)
+    sys.exit(1)
+print("zoomed-out 27dp key struck and scored:", strikes)
+shot("05f-midi-game-zoom")
+tap("exit game", exact=True)
+need("MIDI format 0")
+back()
+
 # ---- game mode: two fingers strike a chord together ----
 # Phone report: simultaneous notes only registered one key - the game view
 # tracked a single finger and ignored the rest. The CI emulator image
