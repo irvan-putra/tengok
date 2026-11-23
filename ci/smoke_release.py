@@ -35,6 +35,12 @@ def vxkwd_from(out):
     m = re.findall(r"\| w=(\d+) h=\d+ loc=\d+,\d+ kb=\d+ lo=\d+ hi=\d+ vx=(-?\d+) kwd=(\d+)", out)
     return (int(m[-1][2]), int(m[-1][1]), int(m[-1][0])) if m else None
 
+def camera_from(out):
+    m = re.findall(
+        r"TENGOK-GAME-CAMERA segments=(\d+) groups=(\d+) glides=(\d+) "
+        r"minWhiteDp=(\d+) below44dp=(\d+) below32dp=(\d+)", out)
+    return tuple(int(v) for v in m[-1]) if m else None
+
 
 def strike_until_scored(pitch, keymap):
     for _ in range(2):
@@ -179,6 +185,13 @@ if not notes_line or notes_line.group(1) != "3" or notes_line.group(4) != "0":
     print("game notes diagnostic missing or wrong:", notes_line)
     sys.exit(1)
 print("published APK: empty-lane hint announced the 12 s entrance:", hint, "notes:", notes_line.groups())
+cam = camera_from(out)
+if not cam or cam[:3] != (2, 2, 1) or cam[3] != 44:
+    shot("FAILED-rel-game")
+    print("published APK: camera plan for the late-entrance pad wrong "
+          "(want segments=2 groups=2 glides=1 minWhiteDp=44):", cam)
+    sys.exit(1)
+print("published APK: camera plan 2 segments, 1 glide for the 16 s rest:", cam)
 need("song timeline")
 need("/ 0:32")
 shot("rel-05d-game-hint")

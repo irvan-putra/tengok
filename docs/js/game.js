@@ -91,11 +91,21 @@ function runGame(viewArea, midi, trackIndex, ctx) {
   viewArea.appendChild(hint);
 
   /* Geometry: song range plus breathing room, clamped to the 88-key board. */
-  let lo = Math.max(21, judged.minPitch - 3);
-  let hi = Math.min(108, judged.maxPitch + 3);
+  const lo = Math.max(21, judged.minPitch - 3);
+  const hi = Math.min(108, judged.maxPitch + 3);
   let kw = new G.KeyWindow(lo, hi, 320);
   let vx = 0;
   let lastPanAt = -1e9;
+  /* The camera is a CameraPlan computed when the game starts: it zooms out
+   * only when every key a passage needs must be visible at once, and only
+   * ever moves sideways inside gaps where no key is pressed or held. The
+   * plan is a pure function of song time, so pause, scrub and freezes read
+   * it directly. A manual drag or a finger on the board freezes the board
+   * (a held key never moves under its finger); when free again it blends
+   * back onto the plan with the same smoothstep instead of jumping. */
+  let plan = null;
+  let camDiverged = false, camResync = false;
+  let rsFromVx = 0, rsFromW = 0, rsStartSongMs = 0, rsDurMs = 1;
 
   /* Song clock */
   const firstStart = Math.max(0, scoring.firstStartMs() / 1000 - LEAD_IN_SEC);
@@ -203,7 +213,9 @@ function runGame(viewArea, midi, trackIndex, ctx) {
         struck: false, downAt: performance.now(), graceTimer: 0 };
     const rect = canvas.getBoundingClientRect();
     if (e.clientY - rect.top >= canvas.clientHeight - KEY_H) {
-      rec.pitch = kw.pitchAt(e.clientX - rect.left + vx);
+      const y0 = e.clientY - rect.top;
+      rec.pitch = kw.pitchAt(e.clientX - rect.left + vx,
+          y0 < canvas.clientHeight - KEY_H + KEY_H * 0.6);
       if (rec.pitch >= 0) {
         pressed.add(rec.pitch); // immediate "registered"
         rec.graceTimer = setTimeout(() => {
@@ -225,13 +237,13 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       const dx = e.clientX - rect.left - p.x;
       if (p.panning) {
         vx = kw.clampViewport(vx - dx);
-        lastPanAt = performance.now();
-        twStart = 0; // a drag cancels any in-flight glide
+        lastPanAt = performance.now(); // holds the plan off for 2.5 s
       } else if (Math.abs(e.clientX - rect.left - p.startX) > 10) {
         p.panning = true; // a deliberate drag is not a tap
         clearTimeout(p.graceTimer); // and a real drag never strikes
         if (p.pitch >= 0) { pressed.delete(p.pitch); p.pitch = -1; }
       }
+
       p.x = e.clientX - rect.left;
     }
   });
@@ -246,7 +258,8 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     if (y >= canvas.clientHeight - KEY_H) {
-      const pitch = kw.pitchAt(x + vx);
+      const pitch = kw.pitchAt(x + vx,
+          y < canvas.clientHeight - KEY_H + KEY_H * 0.6);
       if (pitch >= 0) strike(pitch, performance.now() - p.downAt);
     }
   });
@@ -340,7 +353,12 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     canvas.style.width = w + "px";
     canvas.style.height = h + "px";
     kw = new G.KeyWindow(lo, hi, w);
-    vx = kw.clampViewport(vx);
+    plan = new G.CameraPlan(judgedNotes, lo, hi, w, kw.whiteW);
+    const [ivx, iw] = plan.valueAt(nowSec() * 1000);
+    vx = ivx;
+    setKeyWidth(iw);
+    camDiverged = false;
+    camResync = false;
   }
   window.addEventListener("resize", resize);
   resize();
@@ -426,7 +444,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       const bw = kw.blackW();
       if (x > w || x + bw < 0) continue;
       g.fillStyle = "#22242E";
-      g.fillRect(x, kbY, bw, KEY_H * 0.62);
+      g.fillRect(x, kbY, bw, KEY_H * 0.6);
       const fb = flashes.get(p);
       if (fb) {
         const age = performance.now() - fb.t;
@@ -434,12 +452,12 @@ function runGame(viewArea, midi, trackIndex, ctx) {
           const rgb = fb.grade === G.PERFECT ? "61,163,93"
               : fb.grade === G.GOOD ? "255,179,0" : "138,144,162";
           g.fillStyle = `rgba(${rgb},${(0.43 * (1 - age / 350)).toFixed(3)})`;
-          g.fillRect(x, kbY, bw, KEY_H * 0.62);
+          g.fillRect(x, kbY, bw, KEY_H * 0.6);
         }
       }
       if (pressed.has(p)) {
         g.fillStyle = "rgba(255,255,255,0.40)";
-        g.fillRect(x, kbY, bw, KEY_H * 0.62);
+        g.fillRect(x, kbY, bw, KEY_H * 0.6);
       }
     }
 
@@ -481,58 +499,55 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     }
   }
 
-  function autoFollow() {
-    if (performance.now() - lastPanAt < 2500 || !running) { twStart = 0; return; }
-    let loP = -1, hiP = -1;
-    const now = nowSec();
-    for (let i = 0; i < scoring.total(); i++) {
-      if (scoring.stateOf(i) !== G.PENDING) continue;
-      const s = scoring.noteStartMs(i) / 1000;
-      if (s > now + FALL_AHEAD_SEC) break;
-      if (s + 0.3 < now) continue;
-      const p = scoring.notePitch(i);
-      if (loP < 0 || p < loP) loP = p;
-      if (hiP < 0 || p > hiP) hiP = p;
+  function setKeyWidth(w) {
+    if (Math.abs(w - kw.whiteW) > 0.01) {
+      kw = new G.KeyWindow(lo, hi, canvas.clientWidth, w);
     }
-    if (loP < 0) {
-      const ni = scoring.nextPendingIndex();
-      if (ni < 0) { twStart = 0; return; }
-      loP = hiP = scoring.notePitch(ni);
-    }
-    // Stay still while the cluster sits comfortably inside the board; glide
-    // early, with a time-based ease and a speed cap, instead of jumping.
-    const margin = 24;
-    if (!twStart
-        && kw.leftPx(loP) - vx >= margin && kw.rightPx(hiP) - vx <= canvas.clientWidth - margin) {
-      /* comfortable and no sweep in flight: stay still. A running sweep is
-       * NOT frozen here: it glides to its target so it eases out at the
-       * center instead of cutting to a dead stop at the margin. */
+  }
+
+  function applyCamera() {
+    if (!plan) return;
+    const nowMs = nowSec() * 1000;
+    if (performance.now() - lastPanAt < 2500 || pointers.size > 0) {
+      camDiverged = true;
+      camResync = false;
       return;
     }
-    const target = kw.viewportCentering(Math.max(lo, loP - 2), Math.min(hi, hiP + 2));
-    const diff = target - vx;
-    if (Math.abs(diff) < 1) { vx = target; twDest = target; twStart = 0; return; }
-    /* fixed-duration smoothstep glide: zero speed at both ends, so the board
-     * sweeps to the next cluster without a visible lurch. A retarget restarts
-     * the sweep from wherever the board is now. */
-    const t = performance.now();
-    if (!twStart || Math.abs(target - twDest) > 4) {
-      twFrom = vx; twDest = target; twStart = t;
-      twDur = Math.max(320, 1.5 * Math.abs(target - vx) / (canvas.clientWidth * 0.9) * 1000);
+    const [pvx, pw] = plan.valueAt(nowMs);
+    if (camResync) {
+      const u = Math.min(1, (nowMs - rsStartSongMs) / rsDurMs);
+      const e = u * u * (3 - 2 * u);
+      vx = rsFromVx + (pvx - rsFromVx) * e;
+      setKeyWidth(rsFromW + (pw - rsFromW) * e);
+      if (u >= 1) { camResync = false; camDiverged = false; }
+      return;
     }
-    const u = Math.min(1, (t - twStart) / twDur);
-    const e = u * u * (3 - 2 * u);
-    vx = twFrom + (twDest - twFrom) * e;
-    if (u >= 1) twStart = 0; // sweep complete: idle until retriggered
+    if (camDiverged) {
+      const dvx = Math.abs(pvx - vx), dw = Math.abs(pw - kw.whiteW);
+      if (dvx < 1 && dw < 0.5) {
+        vx = pvx;
+        setKeyWidth(pw);
+        camDiverged = false;
+        return;
+      }
+      camResync = true;
+      rsFromVx = vx;
+      rsFromW = kw.whiteW;
+      rsStartSongMs = nowMs;
+      rsDurMs = Math.max(G.CAM_GLIDE_MIN_MS, 1.5 * dvx
+          / (canvas.clientWidth * G.CAM_GLIDE_PEAK_SCREENS_PER_SEC) * 1000);
+      return;
+    }
+    vx = pvx;
+    setKeyWidth(pw);
   }
-  let twFrom = 0, twDest = 0, twStart = 0, twDur = 1;
 
   function frame() {
     if (ended) return;
     const now = nowSec();
     scoring.tick(now * 1000);
     updateHud();
-    autoFollow();
+    applyCamera();
     draw();
     if (running && scoring.finished()
         && now * 1000 > scoring.lastStartMs() + LEAD_IN_SEC * 1000) {

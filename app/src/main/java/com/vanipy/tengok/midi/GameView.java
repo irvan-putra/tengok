@@ -23,13 +23,16 @@ import java.util.Random;
  * shades the notes, timings stay exactly as written, and nothing is
  * quantized: a gently rolled chord arrives rolled.
  *
- * Keys keep a finger-sized minimum width (KeyWindow.MIN_WHITE_DP). When the
- * song's range is wider than the screen, the board pans: it follows the next
- * notes by itself, and a sideways drag on the keys looks around without
- * striking. A press strikes as soon as it is clearly not a drag (a short
- * grace, or release - whichever comes first) and the press time is carried
- * through either way, so judgment and sparks land during a hold, and
- * panning never costs timing.
+ * Keys keep a finger-sized default width (KeyWindow.MIN_WHITE_DP). The
+ * camera is a CameraPlan computed when the song loads: it zooms out only
+ * when every key a passage needs must be visible at once, and it only ever
+ * moves sideways inside gaps where no key is pressed or held. A sideways
+ * drag on the keys still looks around without striking; the plan blends
+ * back afterwards. A press strikes as soon as it is clearly not a drag (a
+ * short grace, or release - whichever comes first) and the press time is
+ * carried through either way, so judgment and sparks land during a hold,
+ * and panning never costs timing. While any finger is down the board is
+ * frozen: a held key never moves under its finger.
  */
 public final class GameView extends View {
     private static final String TAG = "tengok";
@@ -38,9 +41,7 @@ public final class GameView extends View {
             0xFFD84848, 0xFF3FA8A0, 0xFFC45BA8, 0xFF8A8F3D,
             0xFF6E7FD8, 0xFF4D9E4D, 0xFFB87333, 0xFF7A5CD0,
             0xFFD05858, 0xFF2F9E8E, 0xFFB84FA0, 0xFF999933};
-    /** Pending notes starting within this far after the next one steer the pan. */
-    private static final double FOLLOW_WINDOW_MS = 1500;
-    /** A manual drag holds the board still for this long before follow resumes. */
+    /** A manual drag holds the board still for this long before the plan resumes. */
     private static final long MANUAL_HOLD_MS = 2500;
     /** A press held this long without turning into a pan strikes in place, so
      *  the judgment and sparks land while the finger is still down. A drag
@@ -49,11 +50,6 @@ public final class GameView extends View {
     private static final long STRIKE_GRACE_MS = 90;
     /** While a judged hit's key stays held, fresh sparks re-emit at this pace. */
     private static final long HELD_SPARK_MS = 110;
-    /** Follow glide: minimum sweep duration and peak speed in screens/second. */
-    private static final float FOLLOW_MIN_MS = 320f;
-    private static final float FOLLOW_PEAK_SCREENS_PER_SEC = 0.9f;
-    /** Keep this much slack at the board edges and start gliding early. */
-    private static final float FOLLOW_MARGIN_DP = 18f;
 
     public interface StrikeListener {
         /** delayMs is how long ago the finger landed (0 for a MIDI key). */
@@ -79,6 +75,17 @@ public final class GameView extends View {
     private float viewportX;
     private boolean viewportInit;
     private long manualHoldUntil;
+    /** The precomputed camera; built lazily once the view has a width. */
+    private CameraPlan cameraPlan;
+    /** White-key width currently applied, px; <= 0 until the plan exists. */
+    private float planWhiteW = -1f;
+    private final float[] camOut = new float[2];
+    /** True while the board sits away from the plan (manual drag or a held
+     *  finger froze it); the next free tick blends back instead of jumping. */
+    private boolean camDiverged;
+    private boolean camResync;
+    private float rsFromVx, rsFromW;
+    private double rsStartSongMs, rsDurMs;
     /** One tracked finger. Every gesture rule (grace strike, wobble
      *  forgiveness, drags pan but never strike) applies per finger, exactly
      *  as it did to the single finger before chords were supported. */
@@ -98,10 +105,6 @@ public final class GameView extends View {
     private int heldSparkPitch = -1;
     private int heldSparkColor;
     private long lastHeldSparkMs;
-    private float tweenFrom;
-    private float tweenDest;
-    private long tweenStartMs;
-    private long tweenDurMs;
     /** Last judged strike, flashed briefly on its key in the grade's color. */
     private int flashPitch = -1;
     private int flashGrade = 0;
@@ -147,6 +150,10 @@ public final class GameView extends View {
         viewportInit = false;
         viewportX = 0;
         manualHoldUntil = 0;
+        cameraPlan = null;
+        planWhiteW = -1f;
+        camDiverged = false;
+        camResync = false;
         keysLoggedW = -1;
         invalidate();
     }
@@ -177,90 +184,102 @@ public final class GameView extends View {
 
     public void setNow(double ms) {
         nowMs = ms;
-        updateFollow(false);
+        updateCamera();
         invalidate();
     }
 
     private KeyWindow keyWindow() {
-        return new KeyWindow(loPitch, hiPitch, getWidth(),
-                getResources().getDisplayMetrics().density);
+        float density = getResources().getDisplayMetrics().density;
+        if (planWhiteW > 0f) {
+            return new KeyWindow(loPitch, hiPitch, getWidth(), density, planWhiteW);
+        }
+        return new KeyWindow(loPitch, hiPitch, getWidth(), density);
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (w != oldw && cameraPlan != null) {
+            // the plan's fit math depends on the viewport width: rebuild
+            cameraPlan = null;
+            viewportInit = false;
+        }
+    }
+
+    /** Builds the camera plan once the width is known and snaps onto it. */
+    private void ensurePlan() {
+        if (cameraPlan != null || getWidth() == 0 || scoring == null) return;
+        float density = getResources().getDisplayMetrics().density;
+        float def = new KeyWindow(loPitch, hiPitch, getWidth(), density).whiteW;
+        cameraPlan = new CameraPlan(notes, loPitch, hiPitch, getWidth(), def);
+        String stats = "segments=" + cameraPlan.segmentCount()
+                + " groups=" + cameraPlan.groupCount()
+                + " glides=" + cameraPlan.glideCount()
+                + " minWhiteDp=" + (int) (cameraPlan.minWhiteW() / density)
+                + " below44dp=" + cameraPlan.framesBelow(KeyWindow.MIN_WHITE_DP * density)
+                + " below32dp=" + cameraPlan.framesBelow(32f * density);
+        Log.i(TAG, "TENGOK-GAME-CAMERA " + stats);
+        com.vanipy.tengok.DiagLog.log(getContext(), "GAME-CAMERA " + stats);
+        cameraPlan.valueAt(nowMs, camOut);
+        viewportX = camOut[0];
+        planWhiteW = camOut[1];
+        camDiverged = false;
+        camResync = false;
+        viewportInit = true;
     }
 
     /**
-     * Keeps the next cluster of pending notes on screen. The board only moves
-     * when those notes would fall outside the visible slice, so it stays
-     * still through ordinary passages; motion itself is eased, not snapped.
+     * Applies the precomputed camera. The plan is a pure function of song
+     * time, so playing, pausing, scrubbing and wait-mode freezes all just
+     * read it. Two things override it: a recent manual drag, and any finger
+     * on the board - while a finger is down the board is frozen, so a held
+     * key never moves under it. When the board is free again it blends back
+     * onto the plan with the same smoothstep a planned glide uses instead
+     * of jumping.
      */
-    private void updateFollow(boolean snap) {
+    private void updateCamera() {
         if (getWidth() == 0 || scoring == null) return;
-        KeyWindow kw = keyWindow();
-        if (kw.maxViewport() <= 0) {
-            viewportX = 0;
+        ensurePlan();
+        if (cameraPlan == null) return;
+        if (SystemClock.uptimeMillis() < manualHoldUntil || !fingers.isEmpty()) {
+            camDiverged = true;
+            camResync = false;
             return;
         }
-        if (SystemClock.uptimeMillis() < manualHoldUntil) {
-            tweenStartMs = 0; // a frozen tween must not resume with a stale clock
-            return;
-        }
-        double first = Double.MAX_VALUE;
-        for (int i = 0; i < notes.size(); i++) {
-            if (scoring.stateOf(i) == GameScoring.PENDING) {
-                first = notes.get(i).startSec * 1000.0;
-                break;
+        cameraPlan.valueAt(nowMs, camOut);
+        float pvx = camOut[0];
+        float pw = camOut[1];
+        if (camResync) {
+            double u = rsDurMs <= 0 ? 1.0
+                    : Math.min(1.0, (nowMs - rsStartSongMs) / rsDurMs);
+            float e = (float) (u * u * (3.0 - 2.0 * u));
+            viewportX = rsFromVx + (pvx - rsFromVx) * e;
+            planWhiteW = rsFromW + (pw - rsFromW) * e;
+            if (u >= 1.0) {
+                camResync = false;
+                camDiverged = false;
             }
-        }
-        if (first == Double.MAX_VALUE) { tweenStartMs = 0; return; }
-        int lo = 127, hi = 0;
-        for (int i = 0; i < notes.size(); i++) {
-            if (scoring.stateOf(i) != GameScoring.PENDING) continue;
-            MidiFile.Note n = notes.get(i);
-            if (n.startSec * 1000.0 > first + FOLLOW_WINDOW_MS) continue;
-            if (n.pitch < lo) lo = n.pitch;
-            if (n.pitch > hi) hi = n.pitch;
-        }
-        if (lo > hi) { tweenStartMs = 0; return; }
-        float margin = getResources().getDisplayMetrics().density * FOLLOW_MARGIN_DP;
-        if (!snap && tweenStartMs == 0
-                && kw.leftPx(lo) - viewportX >= margin
-                && kw.rightPx(hi) - viewportX <= getWidth() - margin) {
-            // Cluster comfortable and no sweep in flight: stay still. A
-            // running sweep is NOT frozen here: it keeps gliding to its
-            // target so it eases out at the center instead of cutting to a
-            // dead stop at the margin.
             return;
         }
-        float target = kw.viewportCentering(lo, hi);
-        float diff = target - viewportX;
-        if (snap) {
-            viewportX = target;
-            tweenFrom = tweenDest = target;
-            tweenStartMs = 0;
+        if (camDiverged) {
+            float dvx = Math.abs(pvx - viewportX);
+            float dw = Math.abs(pw - planWhiteW);
+            if (dvx < 1f && dw < 0.5f) {
+                viewportX = pvx;
+                planWhiteW = pw;
+                camDiverged = false;
+                return;
+            }
+            camResync = true;
+            rsFromVx = viewportX;
+            rsFromW = planWhiteW;
+            rsStartSongMs = nowMs;
+            rsDurMs = Math.max(CameraPlan.GLIDE_MIN_MS, 1.5 * dvx
+                    / (getWidth() * CameraPlan.GLIDE_PEAK_SCREENS_PER_SEC) * 1000.0);
             return;
         }
-        if (Math.abs(diff) < 1f) {
-            viewportX = target;
-            tweenDest = target;
-            tweenStartMs = 0;
-            return;
-        }
-        // Fixed-duration smoothstep glide: zero speed at both ends, so the
-        // board sweeps to the next cluster without a visible lurch, however
-        // far away that cluster sits. A retarget restarts the sweep from
-        // wherever the board is now.
-        long tick = SystemClock.uptimeMillis();
-        if (tweenStartMs == 0
-                || Math.abs(target - tweenDest)
-                        > getResources().getDisplayMetrics().density * 4f) {
-            tweenFrom = viewportX;
-            tweenDest = target;
-            tweenStartMs = tick;
-            tweenDurMs = (long) Math.max(FOLLOW_MIN_MS, 1.5f * Math.abs(target - viewportX)
-                    / (getWidth() * FOLLOW_PEAK_SCREENS_PER_SEC) * 1000f);
-        }
-        float t = Math.min(1f, (tick - tweenStartMs) / (float) tweenDurMs);
-        float e = t * t * (3f - 2f * t);
-        viewportX = tweenFrom + (tweenDest - tweenFrom) * e;
-        if (t >= 1f) tweenStartMs = 0; // sweep complete: idle until retriggered
+        viewportX = pvx;
+        planWhiteW = pw;
     }
 
     /** Keyboard strip height, always derived from the current laid-out height. */
@@ -277,17 +296,11 @@ public final class GameView extends View {
                 kw.rightPx(pitch) - viewportX, bottom);
     }
 
-    /** The key at a keyboard-strip point, blacks winning over whites, or -1. */
+    /** The key at a keyboard-strip point, blacks winning over whites, or -1.
+     *  Blacks only own the top part of the strip where they are drawn. */
     private int pitchAt(float x, float y) {
-        for (int p = loPitch; p <= hiPitch; p++) {
-            if (!KeyWindow.isBlack(p)) continue;
-            if (keyRect(p).contains(x, y)) return p;
-        }
-        for (int p = loPitch; p <= hiPitch; p++) {
-            if (KeyWindow.isBlack(p)) continue;
-            if (keyRect(p).contains(x, y)) return p;
-        }
-        return -1;
+        float blackBottom = getHeight() - keyboardH() + keyboardH() * 0.6f;
+        return keyWindow().pitchAt(x + viewportX, y < blackBottom);
     }
 
     @Override
@@ -322,8 +335,7 @@ public final class GameView extends View {
         float hitY = h - kb;
         double pxPerSec = (h - kb) / 3.0; // ~3 seconds of lookahead
         if (!viewportInit && w > 0) {
-            viewportInit = true;
-            updateFollow(true);
+            ensurePlan();
         }
 
         paint.setColor(0xFFFBFBFE);
@@ -538,8 +550,6 @@ public final class GameView extends View {
                     }
                     if (f.panning) {
                         viewportX = kw.clampViewport(viewportX - (x - f.lastX));
-                        tweenFrom = tweenDest = viewportX;
-                        tweenStartMs = 0;
                         f.lastX = x;
                         manualHoldUntil = SystemClock.uptimeMillis() + MANUAL_HOLD_MS;
                         invalidate();
