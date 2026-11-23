@@ -44,6 +44,15 @@ public class FixtureActivity extends Activity {
         addButton(column, "Image: painted PNG", "painted.png", FixtureActivity::paintedPng);
         addButton(column, "Image: corrupt PNG", "corrupt.png", FixtureActivity::corruptPng);
         addButton(column, "Text: latin-1 cafe", "latin1.txt", FixtureActivity::latin1Txt);
+        // Real Bidik screen recordings from bidik's own record-check CI
+        // (record-pixels artifacts, byte-identical). Bidik stamps frames
+        // with wall-clock time, so these are true variable frame rate:
+        // intervals wander ~19-37 ms around a ~34.6 ms mean, the first
+        // frame holds ~0.13-0.17 s, the MP4 index sits at the END of the
+        // file behind a 64-bit mdat size, and one file has no audio track
+        // while the other's audio starts ~0.26 s after the video.
+        addAssetButton(column, "Video: VFR silent, index at end (bidik)", "bidik-vfr-silent.mp4");
+        addAssetButton(column, "Video: VFR delayed audio (bidik)", "bidik-vfr-audio.mp4");
 
         setContentView(column);
     }
@@ -60,6 +69,26 @@ public class FixtureActivity extends Activity {
                 byte[] data = maker.make();
                 Log.i(TAG, "TENGOK-FIXTURE-READY " + label);
                 open(fileName, data);
+            } catch (IOException e) {
+                Log.e(TAG, "fixture failed", e);
+            }
+        });
+        column.addView(b);
+    }
+
+    /** A fixture shipped as a debug-only asset (binary formats a script
+     * cannot synthesize faithfully, like a real recorder's MP4). */
+    private void addAssetButton(LinearLayout column, String label, String assetName) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setOnClickListener(v -> {
+            try (java.io.InputStream in = getAssets().open(assetName);
+                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                byte[] buf = new byte[8192];
+                int r;
+                while ((r = in.read(buf)) >= 0) out.write(buf, 0, r);
+                Log.i(TAG, "TENGOK-FIXTURE-READY " + label);
+                open(assetName, out.toByteArray());
             } catch (IOException e) {
                 Log.e(TAG, "fixture failed", e);
             }

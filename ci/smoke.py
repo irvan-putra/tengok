@@ -131,6 +131,57 @@ def logcat_has(marker):
     return marker in out
 
 
+def video_playback_proof(name, want_tracks, dur_lo, dur_hi, clock_tail, shotname):
+    # Open one real Bidik recording and prove it actually plays: the panel
+    # reports the track set and the wall-clock duration from the sample
+    # table (a constant-rate assumption would land outside dur_lo..dur_hi),
+    # a real frame size arrives, and the position advances once playing.
+    adb("shell", "logcat", "-c")
+    tap(name)
+    ready = None
+    sizes = []
+    out = ""
+    for _ in range(40):
+        out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+        if "TENGOK-VIDEO-ERR" in out:
+            break
+        m = re.search(r"TENGOK-VIDEO-READY durMs=(\d+) tracks=(\w+)", out)
+        if m:
+            ready = (int(m.group(1)), m.group(2))
+            sizes = re.findall(r"TENGOK-VIDEO-SIZE w=(\d+) h=(\d+)", out)
+            if sizes:
+                break
+        time.sleep(0.5)
+    if ready is None:
+        shot("FAILED-" + shotname)
+        print("video never became ready:", name, "| log tail:", out[-1200:])
+        sys.exit(1)
+    if ready[1] != want_tracks or not (dur_lo <= ready[0] <= dur_hi):
+        shot("FAILED-" + shotname)
+        print("video ready line wrong for", name, "- got", ready,
+              "want tracks", want_tracks, "and duration", dur_lo, "..", dur_hi, "ms")
+        sys.exit(1)
+    if not sizes:
+        shot("FAILED-" + shotname)
+        print("no frame ever reached the surface for", name)
+        sys.exit(1)
+    need(clock_tail)
+    adb("shell", "logcat", "-c")
+    tap("Play", exact=True)
+    time.sleep(4)
+    positions = [int(p) for p in re.findall(r"TENGOK-VIDEO-POS ms=(\d+)",
+                 adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))]
+    if len(positions) < 2 or positions[-1] < 1500 or positions[-1] > 6000:
+        shot("FAILED-" + shotname)
+        print("video position did not advance at recording speed:", positions)
+        sys.exit(1)
+    print("video proof:", name, "ready", ready, "frame", sizes[-1],
+          "positions", positions[:6], "...")
+    shot(shotname)
+    back()
+    time.sleep(1)
+
+
 # published-APK proof runs the real user path instead of the debug fixtures
 if os.environ.get("RELEASE_TAG"):
     _here = os.path.dirname(os.path.abspath(__file__))
@@ -1040,6 +1091,21 @@ tap("Image: painted PNG")
 need("480 × 320")
 shot("10-image")
 back()
+
+# ---- video: real Bidik screen recordings (wall-clock variable frame rate) ----
+# Phone report: a Bidik recording was unusable in tengok. Bidik stamps
+# frames with wall-clock time, so its files are true VFR (intervals wander
+# ~19-37 ms around a ~34.6 ms mean against an advertised 30 fps, first
+# frame held ~0.13-0.17 s), carry the MP4 index at the END of the file
+# behind a 64-bit mdat size, start audio ~0.26 s after the video, and have
+# no audio track at all when recorded silent. These two fixtures are
+# byte-identical captures from bidik's own record-check CI on an emulator.
+# The duration windows are tight on purpose: a constant-rate player would
+# report 14.4 s / 5.3 s for these files and fall outside them.
+video_playback_proof("Video: VFR silent, index at end (bidik)",
+                     "v", 14800, 15300, "/ 0:15", "17-video-vfr-silent")
+video_playback_proof("Video: VFR delayed audio (bidik)",
+                     "va", 5700, 5850, "/ 0:05", "17b-video-vfr-audio")
 
 # ---- ground implicit "open with" resolution before testing the handler ----
 for test_uri in (f"file:///data/data/{PKG}/files/smoke.mid",

@@ -451,10 +451,22 @@ test("sniffer: text heuristic and hex fallback", () => {
   binary[3] = 0; // NUL forces binary
   assert.equal(S.sniff("noext", "", binary), S.HEX);
 });
-test("sniffer: mp4 magic does not claim a viewer", () => {
+test("sniffer: mp4/EBML magic and video mime detect VIDEO", () => {
   const ftyp = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70,
     0x6D, 0x70, 0x34, 0x32, 0, 0, 0, 0]);
-  assert.equal(S.byMagic(ftyp), null); // falls through to ext/hex, honestly
+  assert.equal(S.byMagic(ftyp), S.VIDEO);
+  assert.equal(S.byMagic(new Uint8Array([0x1A, 0x45, 0xDF, 0xA3])), S.VIDEO);
+  assert.equal(S.sniff("clip", "video/mp4", new Uint8Array(4)), S.VIDEO);
+  assert.equal(S.sniff("clip.mkv", "", new Uint8Array(4)), S.VIDEO);
+  assert.equal(S.sniff("clip.3gp", "", new Uint8Array(4)), S.VIDEO);
+});
+test("sniffer: audio brands still beat the video family", () => {
+  const m4a = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70,
+    0x4D, 0x34, 0x41, 0x20, 0, 0, 0, 0]); // ftyp "M4A "
+  assert.equal(S.byMagic(m4a), S.AUDIO);
+  const heic = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70,
+    0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0]); // ftyp "heic"
+  assert.equal(S.byMagic(heic), S.IMAGE);
 });
 
 /* ---- Conversion encoders (pure functions) ---- */

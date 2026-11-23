@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tengok - peek into files, right in this tab</title>
 <meta name="description" content="tengok is a local file viewer: MIDI with a piano roll and a play-along game, images, audio, text, and an honest hex view. Nothing is uploaded.">
-<link rel="stylesheet" href="style.css?v=e9dcd4a5">
+<link rel="stylesheet" href="style.css?v=d36910ef">
 </head>
 <body>
 <header>
@@ -36,15 +36,16 @@
       roll, playback, and a play-along game with a live rank.</li>
       <li><b>Images</b>: zoomable viewer, using this browser's decoders.</li>
       <li><b>Audio</b>: a simple player, using this browser's decoders.</li>
+      <li><b>Video</b>: plays with this browser's decoders. Variable
+      frame-rate recordings play at the speed they were recorded.</li>
       <li><b>Text</b>: monospace reading view, UTF-8 with a Latin-1 fallback.</li>
       <li><b>Everything else</b>: a paged hex view plus the file's facts
       (declared type, detected type, size, SHA-256).</li>
     </ul>
     <div class="card-title">Honest limits of the web version</div>
     <ul class="limits">
-      <li>PDF, video, SVG, office documents and archives open in the hex/details
-      view for now, exactly like Android tengok 0.3.2. Rich viewers for them are
-      on the roadmap.</li>
+      <li>PDF, SVG, office documents and archives open in the hex/details
+      view for now. Rich viewers for them are on the roadmap.</li>
       <li>MIDI plays through a simple built-in synth: browsers ship no General
       MIDI sounds, so instruments are approximate and pitch bends are not
       rendered.</li>
@@ -94,14 +95,14 @@
   GPL-3.0
 </footer>
 
-<script src="js/sniffer.js?v=45928a58"></script>
+<script src="js/sniffer.js?v=8e799f8f"></script>
 <script src="js/midi.js?v=820c13d3"></script>
 <script src="js/game-core.js?v=0d579b12"></script>
 <script src="js/synth.js?v=0fc106b2"></script>
-<script src="js/viewers.js?v=3e0f086b"></script>
+<script src="js/viewers.js?v=58098059"></script>
 <script src="js/convert.js?v=fbea8dcf"></script>
 <script src="js/midi-view.js?v=0d9e899f"></script>
 <script src="js/game.js?v=4e14173c"></script>
-<script src="js/app.js?v=ce0cd136"></script>
+<script src="js/app.js?v=096bb2db"></script>
 </body>
 </html>

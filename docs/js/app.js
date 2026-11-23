@@ -150,6 +150,9 @@ function showEntry(index, forceKind) {
     case S.AUDIO:
       Promise.resolve(V.showAudio(viewArea, file, ctx)).then(() => appendConvert(file, S.AUDIO));
       break;
+    case S.VIDEO:
+      Promise.resolve(V.showVideo(viewArea, file, ctx)).then(() => appendConvert(file, S.VIDEO));
+      break;
     case S.TEXT:
       Promise.resolve(V.showText(viewArea, file, ctx)).then(() => appendConvert(file, S.TEXT));
       break;

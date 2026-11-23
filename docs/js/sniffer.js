@@ -8,6 +8,7 @@
 const MIDI = "MIDI";
 const IMAGE = "IMAGE";
 const AUDIO = "AUDIO";
+const VIDEO = "VIDEO";
 const TEXT = "TEXT";
 const HEX = "HEX";
 
@@ -27,8 +28,10 @@ function byMagic(h) {
     if (brand.startsWith("heic") || brand.startsWith("heix") || brand.startsWith("hevc")
         || brand.startsWith("mif1") || brand.startsWith("msf1") || brand.startsWith("avif")
         || brand.startsWith("avis")) return IMAGE;
-    return null; // mp4/mov family: video is not a viewer yet
+    if (brand.startsWith("M4A ") || brand.startsWith("M4B ")) return AUDIO;
+    return VIDEO; // mp4/mov/3gp family
   }
+  if (h[0] === 0x1A && h[1] === 0x45 && h[2] === 0xDF && h[3] === 0xA3) return VIDEO; // EBML: mkv/webm
   if (h[0] === 0x4F && h[1] === 0x67 && h[2] === 0x67 && h[3] === 0x53) return AUDIO; // OggS
   if (h[0] === 0x66 && h[1] === 0x4C && h[2] === 0x61 && h[3] === 0x43) return AUDIO; // fLaC
   if (h[0] === 0x49 && h[1] === 0x44 && h[2] === 0x33) return AUDIO; // ID3
@@ -45,6 +48,7 @@ function byMime(mime) {
   if (m === "audio/mpeg" || m === "audio/mp4" || m === "audio/ogg"
       || m === "audio/flac" || m === "audio/x-wav" || m === "audio/wav"
       || m === "audio/aac" || m === "audio/opus" || m === "audio/3gpp") return AUDIO;
+  if (m.startsWith("video/")) return VIDEO;
   if (m.startsWith("text/")) return TEXT;
   if (m === "application/json" || m === "application/xml") return TEXT;
   return null;
@@ -56,6 +60,7 @@ const EXT = {
   heic: IMAGE, heif: IMAGE, avif: IMAGE, wbmp: IMAGE,
   mp3: AUDIO, ogg: AUDIO, oga: AUDIO, flac: AUDIO, wav: AUDIO, m4a: AUDIO,
   aac: AUDIO, opus: AUDIO, amr: AUDIO, "3ga": AUDIO,
+  mp4: VIDEO, m4v: VIDEO, mov: VIDEO, mkv: VIDEO, webm: VIDEO, "3gp": VIDEO,
   txt: TEXT, log: TEXT, md: TEXT, markdown: TEXT, json: TEXT, xml: TEXT,
   csv: TEXT, tsv: TEXT, yaml: TEXT, yml: TEXT, ini: TEXT, cfg: TEXT,
   conf: TEXT, properties: TEXT, sh: TEXT, py: TEXT, java: TEXT, kt: TEXT,
@@ -93,7 +98,7 @@ function sniff(name, declaredMime, head) {
 }
 
 root.TengokSniffer = {
-  MIDI: MIDI, IMAGE: IMAGE, AUDIO: AUDIO, TEXT: TEXT, HEX: HEX,
+  MIDI: MIDI, IMAGE: IMAGE, AUDIO: AUDIO, VIDEO: VIDEO, TEXT: TEXT, HEX: HEX,
   byMagic: byMagic, byMime: byMime, byExtension: byExtension,
   looksLikeText: looksLikeText, sniff: sniff,
 };

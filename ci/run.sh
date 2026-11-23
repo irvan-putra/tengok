@@ -22,6 +22,9 @@ if [ -n "${RELEASE_TAG:-}" ]; then
   python3 ci/make_latepad.py /tmp/latepad.mid
   adb shell mkdir -p /sdcard/Download/tengok-fixtures
   adb push /tmp/latepad.mid /sdcard/Download/tengok-fixtures/latepad.mid
+  # real Bidik recordings (record-check CI captures) for the video proof
+  adb push app/src/debug/assets/bidik-vfr-silent.mp4 /sdcard/Download/tengok-fixtures/bidik-vfr-silent.mp4
+  adb push app/src/debug/assets/bidik-vfr-audio.mp4 /sdcard/Download/tengok-fixtures/bidik-vfr-audio.mp4
   python3 ci/smoke.py
   exit 0
 fi

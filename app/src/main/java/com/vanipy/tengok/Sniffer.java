@@ -42,7 +42,7 @@ public final class Sniffer {
                     || brand.startsWith("mif1") || brand.startsWith("msf1") || brand.startsWith("avif")
                     || brand.startsWith("avis")) return Kind.IMAGE;
             if (brand.startsWith("M4A ") || brand.startsWith("M4B ")) return Kind.AUDIO;
-            return Kind.VIDEO; // mp4/mov/3gp family: convertible, viewed as hex for now
+            return Kind.VIDEO; // mp4/mov/3gp family: playable and convertible
         }
         if ((h[0] & 0xFF) == 0x1A && (h[1] & 0xFF) == 0x45 && (h[2] & 0xFF) == 0xDF
                 && (h[3] & 0xFF) == 0xA3) return Kind.VIDEO; // EBML: mkv/webm

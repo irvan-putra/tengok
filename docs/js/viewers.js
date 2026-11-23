@@ -133,6 +133,29 @@ function showAudio(container, file, ctx) {
   container.appendChild(detailsCard(file, "audio", null));
 }
 
+/* Video plays through the browser's own decoder stack, which reads the
+ * MP4 sample table wherever the muxer wrote it and honors each frame's
+ * own timestamp - so variable frame-rate recordings (like Bidik's
+ * wall-clock screen captures, index at the end of the file, sound on its
+ * own offset, or no sound at all) play at the speed they were recorded. */
+function showVideo(container, file, ctx) {
+  const card = el("div", "card");
+  card.appendChild(el("div", "card-title", "Video"));
+  const video = el("video", "video-view");
+  video.controls = true;
+  video.playsInline = true;
+  video.src = URL.createObjectURL(file);
+  video.addEventListener("error", () => {
+    card.replaceChildren(errorCard(
+      "This browser has no decoder for that video format.", ctx.onHex));
+  });
+  card.appendChild(video);
+  card.appendChild(el("div", "muted",
+      "Plays with this browser's own decoders; the file never leaves the tab."));
+  container.appendChild(card);
+  container.appendChild(detailsCard(file, "video", null));
+}
+
 function showText(container, file, ctx) {
   if (file.size > MAX_TEXT_BYTES) {
     container.appendChild(errorCard(
@@ -226,6 +249,7 @@ root.TengokViewers = {
   errorCard: errorCard,
   showImage: showImage,
   showAudio: showAudio,
+  showVideo: showVideo,
   showText: showText,
   showHex: showHex,
   MAX_TEXT_BYTES: MAX_TEXT_BYTES,
