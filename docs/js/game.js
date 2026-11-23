@@ -105,7 +105,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
    * back onto the plan with the same smoothstep instead of jumping. */
   let plan = null;
   let camDiverged = false, camResync = false;
-  let rsFromVx = 0, rsFromW = 0, rsStartSongMs = 0, rsDurMs = 1;
+  let rsFromVx = 0, rsFromW = 0, rsStartWallMs = 0, rsDurMs = 1;
 
   /* Song clock */
   const firstStart = Math.max(0, scoring.firstStartMs() / 1000 - LEAD_IN_SEC);
@@ -515,7 +515,8 @@ function runGame(viewArea, midi, trackIndex, ctx) {
     }
     const [pvx, pw] = plan.valueAt(nowMs);
     if (camResync) {
-      const u = Math.min(1, (nowMs - rsStartSongMs) / rsDurMs);
+      // wall clock: must progress even while wait mode freezes the song clock
+      const u = Math.min(1, (performance.now() - rsStartWallMs) / rsDurMs);
       const e = u * u * (3 - 2 * u);
       vx = rsFromVx + (pvx - rsFromVx) * e;
       setKeyWidth(rsFromW + (pw - rsFromW) * e);
@@ -533,7 +534,7 @@ function runGame(viewArea, midi, trackIndex, ctx) {
       camResync = true;
       rsFromVx = vx;
       rsFromW = kw.whiteW;
-      rsStartSongMs = nowMs;
+      rsStartWallMs = performance.now();
       rsDurMs = Math.max(G.CAM_GLIDE_MIN_MS, 1.5 * dvx
           / (canvas.clientWidth * G.CAM_GLIDE_PEAK_SCREENS_PER_SEC) * 1000);
       return;

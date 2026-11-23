@@ -249,7 +249,7 @@ if moved is None or moved[1] == gk[1]:
     print("published APK: drag on the keys did not pan the board:", gk, moved)
     sys.exit(1)
 print("published APK: white keys", gk[0], "dp; drag panned vx", gk[1], "->", moved[1], "no strike")
-time.sleep(3.5)  # outlast the manual hold; follow re-centers the waiting note
+time.sleep(5)  # outlast the 2.5s manual hold + the resync blend
 out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
 km = keymap_from(out)
 if km:
