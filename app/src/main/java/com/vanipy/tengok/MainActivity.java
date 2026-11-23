@@ -338,6 +338,8 @@ public class MainActivity extends Activity {
                     getIntent().getBooleanExtra("fail_details_hash", false));
             view.putExtra("fail_open_grant",
                     getIntent().getBooleanExtra("fail_open_grant", false));
+            view.putExtra("fail_open_provider",
+                    getIntent().getBooleanExtra("fail_open_provider", false));
         }
         startActivity(view);
     }
