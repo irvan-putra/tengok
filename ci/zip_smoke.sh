@@ -41,3 +41,10 @@ adb exec-out screencap -p > ci/zip-shots/zip-entry-open.png
 adb shell input keyevent 4
 sleep 1
 adb exec-out screencap -p > ci/zip-shots/zip-back.png
+
+# A ZIP with actual synthetic viewer fixtures: PNG, WAV and MIDI.
+adb push docs/fixtures/viewers.zip /data/local/tmp/viewers.zip
+adb shell chmod 644 /data/local/tmp/viewers.zip
+adb shell run-as "$PKG" cp /data/local/tmp/viewers.zip files/viewers.zip
+adb shell am start -n "$PKG/.MainActivity" -a android.intent.action.VIEW -t application/zip -d "content://$PKG.fixtureprovider/viewers.zip"
+python3 ci/zip_viewers_smoke.py
