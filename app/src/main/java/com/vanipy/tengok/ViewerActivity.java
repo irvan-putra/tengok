@@ -17,6 +17,7 @@ import com.vanipy.tengok.midi.MidiFile;
 import com.vanipy.tengok.midi.MidiPanel;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 /**
@@ -99,6 +100,9 @@ public class ViewerActivity extends Activity {
             if (BuildConfig.DEBUG && getIntent().getBooleanExtra("fail_open_grant", false)) {
                 throw new SecurityException("simulated lost grant");
             }
+            if (BuildConfig.DEBUG && getIntent().getBooleanExtra("fail_open_provider", false)) {
+                throw new FileNotFoundException("No content provider: content://simulated/gone");
+            }
             head = source.head(8192);
         } catch (SecurityException e) {
             // The read grant is gone: Android's per-app persisted-grant budget
@@ -107,6 +111,20 @@ public class ViewerActivity extends Activity {
             // the only fix - picking the file again. No hex fallback: every
             // further read of this Uri would fail the same way.
             showAccessLost(e);
+            return;
+        } catch (FileNotFoundException e) {
+            // A content:// Uri whose provider Android can no longer resolve
+            // (the sharing app was uninstalled, or its provider is invisible
+            // to tengok under package visibility) fails here with
+            // "No content provider: ..." rather than SecurityException. It is
+            // the same situation as a lost grant - a remembered share whose
+            // one-time access died with the process - so it gets the same
+            // fail-safe: pick the file again, no hex fallback.
+            if (e.getMessage() != null && e.getMessage().startsWith("No content provider")) {
+                showAccessLost(e);
+            } else {
+                showError("tengok couldn't open this file", "open", e);
+            }
             return;
         } catch (IOException e) {
             showError("tengok couldn't open this file", "open", e);
@@ -207,7 +225,7 @@ public class ViewerActivity extends Activity {
         }
     }
 
-    private void showAccessLost(SecurityException e) {
+    private void showAccessLost(Exception e) {
         DiagLog.log(this, "ERR view op=open ex=" + e.getClass().getName());
         LinearLayout column = Ui.column(this);
         LinearLayout card = Ui.card(this);

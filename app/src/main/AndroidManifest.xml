@@ -21,6 +21,16 @@
     <uses-feature android:name="android.software.midi" android:required="false" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- Shares from bidik name its FileProvider. Under Android 11+ package
+         visibility that provider is invisible to tengok unless declared,
+         so a remembered bidik recording re-opened after its one-time share
+         grant died failed with "No content provider" instead of reaching
+         the provider and degrading to the access-lost path. This declares
+         visibility only; it grants tengok no access to anything. -->
+    <queries>
+        <provider android:authorities="com.vanipy.bidik.fileprovider" />
+    </queries>
+
     <application
         android:label="tengok"
         android:icon="@drawable/ic_launcher"
