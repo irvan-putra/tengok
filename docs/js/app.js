@@ -171,7 +171,7 @@ function showEntry(index, forceKind) {
 }
 
 function appendConvert(file, kind) {
-  if (current < 0 || entries[current].file !== file) return; // user moved on
+  if (current < 0 || entries[current].file !== file || entries[current].fromZip) return; // user moved on or memory-only ZIP member
   const card = root.TengokConvert.convertCard(file, kind, ctx);
   if (card) viewArea.appendChild(card);
 }
