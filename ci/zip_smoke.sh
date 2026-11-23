@@ -8,7 +8,7 @@ adb push docs/fixtures/sample.zip /data/local/tmp/sample.zip
 adb shell chmod 644 /data/local/tmp/sample.zip
 adb shell run-as "$PKG" mkdir -p files
 adb shell run-as "$PKG" cp /data/local/tmp/sample.zip files/sample.zip
-adb shell am start -n "$PKG/.ViewerActivity" -a android.intent.action.VIEW -t application/zip --es fixture_path "/data/user/0/$PKG/files/sample.zip"
+adb shell am start -n "$PKG/.MainActivity" -a android.intent.action.VIEW -t application/zip -d "content://$PKG.fixtureprovider/sample.zip"
 sleep 3
 adb shell uiautomator dump /sdcard/zip-ui.xml
 adb pull /sdcard/zip-ui.xml ci/zip-shots/zip-ui.xml
