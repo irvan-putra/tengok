@@ -230,7 +230,7 @@ public class ViewerActivity extends Activity {
                     content.removeAllViews();
                     LinearLayout column = Ui.column(this);
                     LinearLayout card = Ui.card(this);
-                    card.addView(Ui.line(this, "ZIP contents · " + entries.size() + " entries"));
+                    card.addView(Ui.line(this, "ZIP contents · " + entries.size() + (entries.size() == 1 ? " entry" : " entries")));
                     card.addView(Ui.muted(this, "Read-only listing. Paths and sizes are declared by the archive, not verified file contents. Nothing is extracted or executed."));
                     if (entries.isEmpty()) card.addView(Ui.muted(this, "This ZIP is empty."));
                     for (ZipIndex.Entry entry : entries) {
