@@ -23,7 +23,7 @@
 
     <application
         android:label="tengok"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
         android:theme="@style/TengokTheme"
         android:allowBackup="false"
         android:supportsRtl="true">

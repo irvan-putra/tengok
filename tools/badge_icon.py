@@ -59,8 +59,14 @@ def eye(version):
 def main():
     version = common.parse_version(sys.argv)
     root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-    common.write_densities(eye(version), os.path.join(root, "app/src/main/res"))
-    print("wrote tengok icons for", version)
+    # single-variant convention (2026-11-23): one full-color drawable at
+    # xxxhdpi-class 192px, no density ladder
+    res = os.path.join(root, "app/src/main/res")
+    out = os.path.join(res, "drawable")
+    os.makedirs(out, exist_ok=True)
+    eye(version).resize((192, 192), common.Image.LANCZOS).save(
+        os.path.join(out, "ic_launcher.png"), optimize=True)
+    print("wrote tengok icon for", version)
 
 
 if __name__ == "__main__":
