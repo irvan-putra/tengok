@@ -514,3 +514,35 @@ test("conversion targets exist for image/audio/text only", () => {
 });
 
 console.log("\n" + passed + " tests passed" + (process.exitCode ? ", WITH FAILURES" : ""));
+
+/* ZIP listing: independently generated Python fixture, no inflation. */
+await import(join(root, "docs/js/zip.js"));
+const Z = globalThis.TengokZip;
+const sampleZip = fixture("sample.zip");
+test("ZIP: sample lists the text file with declared size", () => {
+  const e = Z.parse(sampleZip); assert.equal(e.length, 1);
+  assert.equal(e[0].name, "unggah-test.txt"); assert.equal(e[0].size, 53);
+  assert.equal(e[0].encrypted, false);
+  assert.equal(S.sniff("renamed.txt", "text/plain", sampleZip), S.ZIP);
+});
+test("ZIP: empty directory", () => {
+  const b = new Uint8Array(22); b.set([80,75,5,6]); assert.deepEqual(Z.parse(b), []);
+});
+test("ZIP: truncated at every byte fails safely", () => {
+  for(let i=0; i<sampleZip.length; i++) assert.throws(() => Z.parse(sampleZip.slice(0,i)));
+});
+test("ZIP: split, ZIP64, too many entries and invalid bounds rejected", () => {
+  for (const [offset,val] of [[4,1], [10,65535], [10,2001], [16,65535]]) {
+    const b = sampleZip.slice(); let end = b.length - 22;
+    while (new DataView(b.buffer).getUint32(end,true) !== 0x06054b50) end--;
+    const v = new DataView(b.buffer); v.setUint16(end+offset,val,true);
+    if (offset===10) v.setUint16(end+8,val,true);
+    assert.throws(() => Z.parse(b));
+  }
+});
+test("ZIP: encrypted flag and untrusted path are only displayed metadata", () => {
+  const b=sampleZip.slice(); let p=0;
+  while(new DataView(b.buffer).getUint32(p,true)!==0x02014b50) p++;
+  b[p+8]|=1; b.set(new TextEncoder().encode("../"),p+46);
+  assert.equal(Z.parse(b)[0].encrypted,true); assert.ok(Z.parse(b)[0].name.startsWith("../"));
+});

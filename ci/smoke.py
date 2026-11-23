@@ -1560,6 +1560,19 @@ back()
 time.sleep(1)
 shot("15-convert")
 
+# ---- ZIP contents, synthetic sample through a real VIEW ----
+zip_source = "docs/fixtures/sample.zip"
+adb("push", zip_source, "/data/local/tmp/tengok-sample.zip")
+adb("shell", "chmod", "644", "/data/local/tmp/tengok-sample.zip")
+adb("shell", "run-as", PKG, "cp", "/data/local/tmp/tengok-sample.zip", "files/sample.zip")
+adb("shell", "am", "start", "-n", f"{PKG}/.ViewerActivity", "-a", "android.intent.action.VIEW", "-t", "application/zip", "--es", "fixture_path", f"/data/user/0/{PKG}/files/sample.zip")
+need("ZIP contents")
+need("unggah-test.txt")
+need("53 bytes")
+shot("zip-contents")
+tap("Show raw bytes")
+shot("zip-raw-bytes")
+
 # ---- launcher icon ----
 adb("shell", "input", "keyevent", "3")
 time.sleep(2)

@@ -148,6 +148,9 @@ public class ViewerActivity extends Activity {
         }
         content.removeAllViews();
         switch (k) {
+            case ZIP:
+                showZip();
+                break;
             case MIDI:
                 showMidi();
                 break;
@@ -214,6 +217,47 @@ public class ViewerActivity extends Activity {
         // the panel wraps its own viewer cards in a ScrollView; the root must
         // stay viewport-sized so game mode can fill exactly the screen
         content.addView(midiPanel.view());
+    }
+
+    private void showZip() {
+        android.widget.ProgressBar loading = new android.widget.ProgressBar(this);
+        content.addView(loading);
+        new Thread(() -> {
+            try {
+                java.util.List<ZipIndex.Entry> entries = ZipIndex.parse(source.readAll(Source.MAX_BUFFERED_BYTES));
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed() || kind != Sniffer.Kind.ZIP) return;
+                    content.removeAllViews();
+                    LinearLayout column = Ui.column(this);
+                    LinearLayout card = Ui.card(this);
+                    card.addView(Ui.line(this, "ZIP contents · " + entries.size() + " entries"));
+                    card.addView(Ui.muted(this, "Read-only listing. Paths and sizes are declared by the archive, not verified file contents. Nothing is extracted or executed."));
+                    if (entries.isEmpty()) card.addView(Ui.muted(this, "This ZIP is empty."));
+                    for (ZipIndex.Entry entry : entries) {
+                        TextView name = Ui.line(this, entry.name);
+                        name.setTypeface(Typeface.MONOSPACE);
+                        name.setTextIsSelectable(true);
+                        name.setPadding(0, Ui.dp(this, 14), 0, 0);
+                        card.addView(name);
+                        card.addView(Ui.muted(this, entry.directory ? "Folder" : entry.size + " bytes · packed " + entry.packed + " bytes" + (entry.encrypted ? " · encrypted" : "")));
+                    }
+                    card.addView(Ui.muted(this, "Limits: 32 MB ZIP, 2,000 entries. No extraction, password opening, ZIP64 or split archives. Encrypted entries can be listed only when their directory is readable."));
+                    android.widget.Button raw = new android.widget.Button(this);
+                    raw.setText("Show raw bytes");
+                    raw.setOnClickListener(v -> showKind(Sniffer.Kind.HEX));
+                    card.addView(raw);
+                    column.addView(card);
+                    ScrollView scroll = new ScrollView(this);
+                    scroll.addView(column);
+                    content.addView(scroll);
+                });
+            } catch (IOException e) {
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed() && kind == Sniffer.Kind.ZIP)
+                        showError("tengok couldn't list this ZIP", "zip", e);
+                });
+            }
+        }, "zip-list").start();
     }
 
     private void showText() {

@@ -123,6 +123,9 @@ function showEntry(index, forceKind) {
   viewArea.appendChild(title);
 
   switch (kind) {
+    case S.ZIP:
+      root.TengokZip.show(viewArea, file, ctx);
+      break;
     case S.MIDI:
       if (file.size > MAX_MIDI_BYTES) {
         viewArea.appendChild(V.errorCard(
@@ -174,6 +177,7 @@ const SAMPLES = [
   ["image", "pixel.png", "image"],
   ["audio", "tone.wav", "audio"],
   ["text", "sample.txt", "text"],
+  ["zip", "sample.zip", "ZIP archive"],
 ];
 
 /* A fixed allowlist for ?sample= deep links: only these built-in synthetic
@@ -192,6 +196,7 @@ function loadSample(name) {
       .then((blob) => {
         const type = name.endsWith(".mid") ? "audio/midi"
             : name.endsWith(".png") ? "image/png"
+            : name.endsWith(".zip") ? "application/zip"
             : name.endsWith(".wav") ? "audio/wav" : "text/plain";
         const before = entries.length;
         addFiles([new File([blob], name, { type: type })]).then(() => {
