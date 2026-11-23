@@ -320,10 +320,11 @@ if ready is None or not keymap:
     sys.exit(1)
 print("game ready, track", ready, "keys:", len(keymap))
 cam = camera_from(out)
-if not cam or cam[:3] != (2, 2, 1) or cam[3] != 44 or cam[4] != 0:
+if not cam or cam[:3] != (6, 2, 1) or cam[3] != 44 or cam[4] != 0:
     shot("FAILED-midi-game-camera")
     print("camera plan for the two-phrase song wrong "
-          "(want segments=2 groups=2 glides=1 minWhiteDp=44 below44dp=0):", cam)
+          "(want segments=6 (per-note, 50ms gaps stay separate) "
+          "groups=2 glides=1 minWhiteDp=44 below44dp=0):", cam)
     sys.exit(1)
 print("camera plan: 2 phrases, 1 gap glide, keys at the 44dp default:", cam)
 # zero judged notes is zero evidence: the score line must start unranked,
