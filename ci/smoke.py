@@ -508,10 +508,11 @@ if ready is None or not keymap:
     print("chord game never became ready:", ready, len(keymap))
     sys.exit(1)
 cam = camera_from(out)
-if not cam or cam[:3] != (1, 1, 0) or cam[3] != 44:
+if not cam or cam[:3] != (2, 1, 0) or cam[3] != 44:
     shot("FAILED-midi-game-chord")
     print("camera plan for the chord song wrong "
-          "(want segments=1 groups=1 glides=0 minWhiteDp=44):", cam)
+          "(want segments=2 (chord, then D2 50ms later), one merged group, "
+          "glides=0 minWhiteDp=44):", cam)
     sys.exit(1)
 print("chord camera plan: one dense segment, no glides:", cam)
 tap("wait for me: off", exact=True)  # toggles wait mode ON
