@@ -28,9 +28,12 @@ music.
 ## Honest limits
 
 - "Any file" means every file opens *somewhere* honest (special viewer, or
-  hex + details), not that every format has a rich viewer yet. PDF, video,
-  SVG, office documents and archive browsing are not built yet; those files
-  open in the hex/details view today.
+  hex + details), not that every format has a rich viewer yet. PDF, SVG,
+  office documents and archive browsing are not built yet; those files open
+  in the hex/details view today. Video plays: mp4/mkv/webm/mov/3gp use the
+  phone's own decoders, and variable frame-rate recordings (like Bidik's
+  screen captures, whose frames carry wall-clock timestamps and whose index
+  sits at the end of the file) play at the speed they were recorded.
 - MIDI and audio playback use the device's own decoders/synth. Nearly every
   Android phone has a MIDI synth built in; if one does not, tengok says so
   instead of pretending to play.

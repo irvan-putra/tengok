@@ -244,12 +244,14 @@ public class MainActivity extends Activity {
                 "Pinch to zoom. Animated GIFs play.",
                 "Audio (.mp3, .ogg, .flac, .wav, .m4a, .aac)",
                 "Simple on-device player.",
+                "Video (.mp4, .mkv, .webm, .mov, .3gp)",
+                "Plays on this phone, sound included when the file has it. Variable frame-rate recordings play at the speed they were recorded.",
                 "Text (.txt, .log, .md, .json, .csv, source code, and friends)",
                 "Shown as plain text, UTF-8 or Latin-1.",
                 "Everything else",
                 "A paged hex view plus the file's details (type, size, SHA-256), so no file is a dead end.",
                 "Not yet, honestly",
-                "PDF, video, office documents, SVG and archives are on the roadmap; today they open in the hex/details view.",
+                "PDF, office documents, SVG and archives are on the roadmap; today they open in the hex/details view.",
         };
         for (int i = 0; i < blocks.length; i += 2) {
             LinearLayout card = Ui.card(this);

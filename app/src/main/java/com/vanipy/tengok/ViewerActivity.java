@@ -35,6 +35,7 @@ public class ViewerActivity extends Activity {
     private TextView titleView;
     private MidiPanel midiPanel;
     private AudioPanel audioPanel;
+    private VideoPanel videoPanel;
     private ConvertPanel convertPanel;
 
     @Override
@@ -143,9 +144,8 @@ public class ViewerActivity extends Activity {
                 showText();
                 break;
             case VIDEO:
-                // No video player yet; the bytes stay inspectable and the
-                // convert card offers MP4 re-encoding.
-                addWithConvert(HexPanel.build(this, source), k);
+                videoPanel = new VideoPanel();
+                addWithConvert(videoPanel.build(this, source), k);
                 break;
             case HEX:
             default:
@@ -326,6 +326,10 @@ public class ViewerActivity extends Activity {
         if (audioPanel != null) {
             audioPanel.release();
             audioPanel = null;
+        }
+        if (videoPanel != null) {
+            videoPanel.release();
+            videoPanel = null;
         }
     }
 

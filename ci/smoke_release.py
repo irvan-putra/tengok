@@ -146,6 +146,14 @@ need("read-only")  # tengok's own footer: proves we left the picker
 need("latepad.mid")
 shot("rel-02-explorer")
 
+# Real Bidik recordings through the real user path (SAF explorer, content
+# Uri): wall-clock VFR, index at the end of the file, one silent, one with
+# audio starting ~0.26 s after the video. Byte-identical bidik CI captures.
+video_playback_proof("bidik-vfr-silent.mp4",
+                     "v", 14800, 15300, "/ 0:15", "rel-02b-video-vfr-silent")
+video_playback_proof("bidik-vfr-audio.mp4",
+                     "va", 5700, 5850, "/ 0:05", "rel-02c-video-vfr-audio")
+
 tap("latepad.mid")
 time.sleep(2)
 need("MIDI format 1")
