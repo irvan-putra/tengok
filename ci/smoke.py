@@ -551,6 +551,89 @@ tap("exit game", exact=True)
 need("MIDI format 0")
 back()
 
+# ---- game camera: identical quiet phrases must not shift the zoom ----
+# Phone report (Galaxy A24, 0.5.0): a warm-pad part shaped quiet phrase,
+# SAME quiet phrase, wide dense passage never zoomed out - the camera sat
+# at the 44dp default while wide chords landed on off-screen keys. Cause:
+# identical neighbor frames share no glide, and valueAt indexed groups by
+# glide position, serving the narrow frame for the wide passage. This
+# fixture is that shape in 20 s: zoom to 19dp keys must engage by ~11 s
+# and come back to 44dp for the tail.
+tap("MIDI: quiet pad, wide middle")
+need("MIDI format 0")
+tap("Game", exact=True)
+time.sleep(2)
+ready = None
+keymap = {}
+for _ in range(40):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    m = re.search(r"TENGOK-GAME-READY track=(\d+)", out)
+    km = keymap_from(out)
+    if km:
+        keymap = km
+    if m:
+        ready = m.group(1)
+        if keymap:
+            break
+    time.sleep(0.5)
+if ready is None or not keymap:
+    shot("FAILED-midi-game-padzoom")
+    print("pad-shape game never became ready:", ready, len(keymap))
+    sys.exit(1)
+cam = camera_from(out)
+if not cam or cam != (4, 4, 2, 19, 1, 1):
+    shot("FAILED-midi-game-padzoom")
+    print("camera plan for the pad shape wrong (want segments=4 groups=4 "
+          "glides=2 minWhiteDp=19 below44dp=1 below32dp=1):", cam)
+    sys.exit(1)
+gk = vxkwd_from(out)
+if gk is None or gk[0] != 44:
+    shot("FAILED-midi-game-padzoom")
+    print("pad shape should open at the 44dp default, got:", gk)
+    sys.exit(1)
+print("pad shape planned: ", cam, "opens at kwd", gk[0], "dp")
+adb("shell", "logcat", "-c")
+tap("play", exact=True)
+zoomed = None
+zoom_out = ""
+for _ in range(70):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    gk = vxkwd_from(out)
+    if gk and gk[0] == 19:
+        zoomed = gk
+        zoom_out = out
+        break
+    time.sleep(0.5)
+if zoomed is None:
+    shot("FAILED-midi-game-padzoom")
+    print("camera never zoomed out for the wide middle passage; last:", gk)
+    sys.exit(1)
+print("wide middle zoomed out mid-song: kwd 19dp at vx", zoomed[1])
+km = keymap_from(zoom_out)
+for edge in (48, 83):
+    if edge not in km or not (0 < km[edge][0] < 1080):
+        shot("FAILED-midi-game-padzoom")
+        print("edge key", edge, "off screen while zoomed:", km.get(edge))
+        sys.exit(1)
+print("both edge keys of the wide passage on screen at 19dp")
+back_to = None
+for _ in range(50):
+    out = adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace")
+    gk = vxkwd_from(out)
+    if gk and gk[0] == 44:
+        back_to = gk
+        break
+    time.sleep(0.5)
+if back_to is None:
+    shot("FAILED-midi-game-padzoom")
+    print("camera never returned to 44dp for the quiet tail; last:", gk)
+    sys.exit(1)
+print("camera glided back to 44dp for the quiet tail")
+shot("05g-midi-game-padzoom")
+tap("exit game", exact=True)
+need("MIDI format 0")
+back()
+
 # ---- game mode: two fingers strike a chord together ----
 # Phone report: simultaneous notes only registered one key - the game view
 # tracked a single finger and ignored the rest. The CI emulator image

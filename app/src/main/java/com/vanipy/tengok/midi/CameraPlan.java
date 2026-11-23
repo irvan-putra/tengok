@@ -182,6 +182,10 @@ public final class CameraPlan {
      * out[1] = white-key width px. A pure function of song time, so pause,
      * scrub and wait-mode freezes need no special cases. Glides animate
      * with the same smoothstep the old follow used: zero speed at both ends.
+     *
+     * Identical neighbor frames share no glide, so glide i does NOT
+     * correspond to group i: the active frame is carried through the glide
+     * list instead of indexing groups by glide position.
      */
     public void valueAt(double songMs, float[] out) {
         if (groups.isEmpty()) {
@@ -189,11 +193,15 @@ public final class CameraPlan {
             out[1] = defaultWhiteW;
             return;
         }
-        for (int i = 0; i < glides.size(); i++) {
-            Glide g = glides.get(i);
+        // Before the first glide the frame is the first group's (every
+        // group before the first glide shares its frame), and each passed
+        // glide leaves the camera on the frame it glided to.
+        float vx = groups.get(0).vx;
+        float w = groups.get(0).whiteW;
+        for (Glide g : glides) {
             if (songMs < g.startMs) {
-                out[0] = groups.get(i).vx;
-                out[1] = groups.get(i).whiteW;
+                out[0] = vx;
+                out[1] = w;
                 return;
             }
             if (songMs <= g.endMs) {
@@ -204,10 +212,11 @@ public final class CameraPlan {
                 out[1] = (float) (g.fromW + (g.toW - g.fromW) * e);
                 return;
             }
+            vx = g.toVx;
+            w = g.toW;
         }
-        Group last = groups.get(groups.size() - 1);
-        out[0] = last.vx;
-        out[1] = last.whiteW;
+        out[0] = vx;
+        out[1] = w;
     }
 
     /** Busy segments before short-gap frame merging. */
