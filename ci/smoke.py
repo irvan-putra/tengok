@@ -288,7 +288,7 @@ def pan_vs_strike_proof(pitch, keymap, failshot):
         print("drag on the keys did not pan the board:", gk, moved)
         sys.exit(1)
     print("white keys", gk[0], "dp; drag panned vx", gk[1], "->", moved[1], "with no strike")
-    time.sleep(3.5)  # outlast the manual hold; follow re-centers the waiting note
+    time.sleep(5)  # outlast the 2.5s manual hold + the resync blend
     km = keymap_from(adb("logcat", "-d", "-s", "tengok:I").stdout.decode("utf-8", "replace"))
     if km:
         keymap = km

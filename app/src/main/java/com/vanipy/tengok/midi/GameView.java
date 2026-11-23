@@ -85,7 +85,10 @@ public final class GameView extends View {
     private boolean camDiverged;
     private boolean camResync;
     private float rsFromVx, rsFromW;
-    private double rsStartSongMs, rsDurMs;
+    // wall-clock: the resync after a manual drag must also progress while
+    // wait mode has the song clock frozen, or the camera never comes back
+    private long rsStartWallMs;
+    private double rsDurMs;
     /** One tracked finger. Every gesture rule (grace strike, wobble
      *  forgiveness, drags pan but never strike) applies per finger, exactly
      *  as it did to the single finger before chords were supported. */
@@ -251,7 +254,7 @@ public final class GameView extends View {
         float pw = camOut[1];
         if (camResync) {
             double u = rsDurMs <= 0 ? 1.0
-                    : Math.min(1.0, (nowMs - rsStartSongMs) / rsDurMs);
+                    : Math.min(1.0, (SystemClock.uptimeMillis() - rsStartWallMs) / rsDurMs);
             float e = (float) (u * u * (3.0 - 2.0 * u));
             viewportX = rsFromVx + (pvx - rsFromVx) * e;
             planWhiteW = rsFromW + (pw - rsFromW) * e;
@@ -273,7 +276,7 @@ public final class GameView extends View {
             camResync = true;
             rsFromVx = viewportX;
             rsFromW = planWhiteW;
-            rsStartSongMs = nowMs;
+            rsStartWallMs = SystemClock.uptimeMillis();
             rsDurMs = Math.max(CameraPlan.GLIDE_MIN_MS, 1.5 * dvx
                     / (getWidth() * CameraPlan.GLIDE_PEAK_SCREENS_PER_SEC) * 1000.0);
             return;
