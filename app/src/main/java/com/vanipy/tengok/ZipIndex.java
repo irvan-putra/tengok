@@ -6,14 +6,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Read-only central-directory listing. Never inflates or writes archive entries. */
+/** Read-only central-directory listing. Inflates one bounded entry in memory, never writes files. */
 public final class ZipIndex {
     public static final int MAX_ENTRIES = 2000;
+    public static final int MAX_ENTRY_BYTES = 16 * 1024 * 1024;
+    public static final int MAX_RATIO = 100;
     public static final class Entry {
         public final String name;
         public final long size, packed;
+        private final long crc;
+        private final int local, method, dataEnd;
         public final boolean encrypted, directory;
-        Entry(String name, long size, long packed, boolean encrypted) {
+        Entry(String name, long size, long packed, boolean encrypted, long crc, int local, int method, int dataEnd) {
+            this.crc = crc; this.local = local; this.method = method; this.dataEnd = dataEnd;
             this.name = name; this.size = size; this.packed = packed;
             this.encrypted = encrypted; this.directory = name.endsWith("/");
         }
@@ -62,10 +67,53 @@ public final class ZipIndex {
                     (flags & 2048) != 0 ? StandardCharsets.UTF_8 : Charset.forName("IBM437"));
             // Control characters must not hide lines or mimic UI controls.
             name = name.replaceAll("[\\p{Cntrl}\\p{Cf}]", "\uFFFD");
-            entries.add(new Entry(name, size, packed, (flags & 1) != 0));
+            entries.add(new Entry(name, size, packed, (flags & 1) != 0, u32(b, p + 16), (int) local, u16(b, p + 10), (int) offset));
             p = (int) next;
         }
         require(p == end, "ZIP directory size does not match its entries.");
         return entries;
     }
+    /** Metadata is re-read from these archive bytes; caller selects only the index. */
+    public static byte[] open(byte[] archive, int index) throws IOException {
+        List<Entry> entries = parse(archive);
+        require(index >= 0 && index < entries.size(), "ZIP entry is no longer available.");
+        Entry e = entries.get(index);
+        require(!e.directory, "This entry is a folder.");
+        require(!e.encrypted, "Encrypted entries cannot be opened.");
+        require(e.method == 0 || e.method == 8, "Only stored and deflated ZIP entries can be opened.");
+        require(e.size <= MAX_ENTRY_BYTES, "ZIP entry opening is limited to 16 MB per file.");
+        require(e.size <= Math.max(1L, e.packed) * MAX_RATIO, "ZIP compression ratio exceeds the 100:1 safety limit.");
+        int p = e.local;
+        require((u16(archive, p + 6) & 1) == 0 && u16(archive, p + 8) == e.method,
+                "ZIP local and central entry metadata disagree.");
+        long start = (long) p + 30 + u16(archive, p + 26) + u16(archive, p + 28);
+        require(start + e.packed <= e.dataEnd, "ZIP entry data is truncated.");
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        if (e.method == 0) {
+            require(e.packed == e.size, "Stored ZIP entry sizes disagree.");
+            out.write(archive, (int) start, (int) e.packed);
+        } else {
+            java.util.zip.Inflater inflater = new java.util.zip.Inflater(true);
+            try {
+                inflater.setInput(archive, (int) start, (int) e.packed);
+                byte[] buf = new byte[8192];
+                while (!inflater.finished()) {
+                    int n = inflater.inflate(buf);
+                    require((long) out.size() + n <= e.size && (long) out.size() + n <= MAX_ENTRY_BYTES,
+                            "ZIP entry expands beyond its declared size or safety limit.");
+                    if (n > 0) out.write(buf, 0, n);
+                    else require(inflater.finished(), "ZIP compressed data is truncated or invalid.");
+                }
+                require(inflater.getBytesRead() == e.packed, "ZIP compressed size does not match its data.");
+            } catch (java.util.zip.DataFormatException ex) {
+                throw new IOException("ZIP compressed data is invalid.", ex);
+            } finally { inflater.end(); }
+        }
+        byte[] data = out.toByteArray();
+        require(data.length == e.size, "ZIP entry size check failed.");
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32(); crc.update(data);
+        require(crc.getValue() == e.crc, "ZIP entry checksum check failed.");
+        return data;
+    }
+
 }

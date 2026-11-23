@@ -279,9 +279,12 @@ public class MidiPanel {
     private void preparePlayer() {
         try {
             player = new MediaPlayer();
+            android.media.MediaDataSource memory = source.mediaDataSource();
             Uri uri = source.uri();
             File local = source.localFile();
-            if (uri != null) {
+            if (memory != null) {
+                player.setDataSource(memory);
+            } else if (uri != null) {
                 player.setDataSource(ctx, uri);
             } else if (local != null) {
                 player.setDataSource(local.getAbsolutePath());

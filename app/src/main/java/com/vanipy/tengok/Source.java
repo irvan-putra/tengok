@@ -23,6 +23,9 @@ public abstract class Source {
 
     public abstract InputStream open() throws IOException;
 
+    /** In-memory media source, used only by archive entries. No temporary files. */
+    public android.media.MediaDataSource mediaDataSource() { return null; }
+
     /** A seekable descriptor when the provider gives one, else null. */
     public ParcelFileDescriptor openFd() throws IOException {
         return null;
@@ -151,8 +154,19 @@ public abstract class Source {
         }
 
         @Override
-        public InputStream open() {
-            return new ByteArrayInputStream(data);
+        public InputStream open() { return new ByteArrayInputStream(data); }
+
+        @Override
+        public android.media.MediaDataSource mediaDataSource() {
+            return new android.media.MediaDataSource() {
+                @Override public int readAt(long pos, byte[] buffer, int offset, int count) {
+                    if (pos < 0 || pos >= data.length) return -1;
+                    int n = Math.min(count, data.length - (int) pos);
+                    System.arraycopy(data, (int) pos, buffer, offset, n); return n;
+                }
+                @Override public long getSize() { return data.length; }
+                @Override public void close() { }
+            };
         }
     }
 

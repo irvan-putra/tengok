@@ -84,9 +84,11 @@ public class AudioPanel {
     private void prepare(Context ctx, Source source) {
         try {
             player = new MediaPlayer();
+            android.media.MediaDataSource memory = source.mediaDataSource();
             Uri uri = source.uri();
             File local = source.localFile();
-            if (uri != null) player.setDataSource(ctx, uri);
+            if (memory != null) player.setDataSource(memory);
+            else if (uri != null) player.setDataSource(ctx, uri);
             else if (local != null) player.setDataSource(local.getAbsolutePath());
             else throw new IllegalStateException("no playable source");
             player.setOnPreparedListener(mp -> {

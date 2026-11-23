@@ -20,3 +20,24 @@ assert 'ZIP contents' in text and 'unggah-test.txt' in text and '53 bytes' in te
 print('ZIP viewer passed: sample file, entry count and sizes visible')
 PY
 adb exec-out screencap -p > ci/zip-shots/zip-contents.png
+
+python3 - <<'PYCODE'
+import re,subprocess,xml.etree.ElementTree as ET
+nodes=list(ET.parse('ci/zip-shots/zip-ui.xml').iter('node'))
+n=next(n for n in nodes if n.attrib.get('text','')=='Open: unggah-test.txt')
+x1,y1,x2,y2=map(int,re.findall(r'\d+',n.attrib['bounds']))
+subprocess.run(['adb','shell','input','tap',str((x1+x2)//2),str((y1+y2)//2)],check=True)
+PYCODE
+sleep 2
+adb shell uiautomator dump /sdcard/zip-open.xml
+adb pull /sdcard/zip-open.xml ci/zip-shots/zip-open.xml
+python3 - <<'PYCODE'
+import xml.etree.ElementTree as ET
+text='\n'.join(n.attrib.get('text','') for n in ET.parse('ci/zip-shots/zip-open.xml').iter('node'))
+assert 'Unggah test file.' in text and 'Synthetic content' in text,text
+print('ZIP text entry opens in existing viewer')
+PYCODE
+adb exec-out screencap -p > ci/zip-shots/zip-entry-open.png
+adb shell input keyevent 4
+sleep 1
+adb exec-out screencap -p > ci/zip-shots/zip-back.png

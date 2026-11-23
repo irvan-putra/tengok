@@ -51,4 +51,23 @@ public class ZipIndexTest {
         Random random = new Random(1);
         for (int n=0;n<300;n++) { byte[] b=new byte[n]; random.nextBytes(b); bad(b); }
     }
+
+    @Test public void opensDeflateAndChecksCrc() throws Exception {
+        byte[] b = zip("file.txt");
+        assertEquals("Synthetic content", new String(ZipIndex.open(b, 0), "UTF-8"));
+        for (int i=0; i<b.length-4; i++) if (b[i]==80 && b[i+1]==75 && b[i+2]==1 && b[i+3]==2) {
+            b[i+16] ^= 1; break;
+        }
+        try { ZipIndex.open(b,0); fail("CRC should fail"); } catch(IOException expected) { }
+    }
+    @Test public void rejectsBombAndEncryption() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try(ZipOutputStream z=new ZipOutputStream(out)) {
+            z.putNextEntry(new ZipEntry("bomb.txt"));z.write(new byte[1024*1024]);z.closeEntry();
+        }
+        try { ZipIndex.open(out.toByteArray(),0); fail("ratio should fail"); } catch(IOException expected) { }
+        byte[] b=zip("a");
+        for (int i=0; i<b.length-4; i++) if (b[i]==80 && b[i+1]==75 && b[i+2]==1 && b[i+3]==2) {b[i+8]|=1;break;}
+        try { ZipIndex.open(b,0); fail("encryption should fail"); } catch(IOException expected) { }
+    }
 }

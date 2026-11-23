@@ -115,6 +115,8 @@ jobs:
           cat > notes.md <<NOTES
           tengok ${VER}: peek into any file. MIDI songs show their summary, instruments and a piano roll and play on the phone's built-in synth; images zoom; audio and video play; text reads; everything else opens in a paged hex view with a details sheet (type, size, SHA-256). Offline, no accounts, zero Android permissions, files never leave the phone.
 
+          0.7.1: tap stored/deflated ZIP entries to open text, images, audio, MIDI or hex in memory. No temporary files or new permissions. Entry opening is limited to 16 MB and 100:1 compression, with CRC checks. Nested ZIPs and Android videos inside ZIP use hex; no password opening.
+
           0.7.0 adds read-only ZIP contents: paths, sizes and encrypted-entry labels. Bounded to 32 MB and 2,000 entries; no extraction, ZIP64, split ZIPs or password opening. Archive contents are never decompressed or written. Still offline, zero Android permissions.
 
           0.6.1 fixes re-opening a file another app shared (like a bidik recording) from the recent-files list after the one-time share access has lapsed: it now shows the same "pick the file again" card as any other lost access instead of an error with a hex offer that could only fail the same way, and tengok declares visibility of bidik's share provider so such files reach that path at all. The file itself is never touched. Still offline, still zero Android permissions.

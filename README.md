@@ -13,7 +13,7 @@ The trusted checksum is GitHub's per-asset digest on each release asset;
 older releases also carry a `.sha256` sidecar, kept but no longer published
 for new releases. Also listed in the [kaji gallery](https://vanipy.com/kaji/apk/).
 
-## What it opens today (v0.7.0)
+## What it opens today (v0.7.1)
 
 | Kind | What you get |
 | --- | --- |
@@ -21,7 +21,7 @@ for new releases. Also listed in the [kaji gallery](https://vanipy.com/kaji/apk/
 | Images (`.png`, `.jpg`, `.webp`, `.gif`, `.bmp`, `.heic`/`.avif` on Android versions that ship those decoders) | Pinch-zoom viewer; animated GIFs play |
 | Audio (`.mp3`, `.ogg`, `.flac`, `.wav`, `.m4a`, `.aac`) | Simple on-device player |
 | Text (`.txt`, `.log`, `.md`, `.json`, `.csv`, source code, and other text) | Monospace reading view, UTF-8 with a Latin-1 fallback |
-| ZIP (`.zip`) | Read-only paths, sizes and encrypted-entry labels, no extraction |
+| ZIP (`.zip`) | Tap entries to view in memory; paths, sizes and encrypted-entry labels |
 | Everything else | Paged hex view plus a details sheet: declared type, detected type, size, SHA-256 |
 
 Detection uses the file's actual leading bytes first, then its declared type,
@@ -30,7 +30,7 @@ music.
 
 ## Honest limits
 
-- ZIP listing is capped at 32 MB archives and 2,000 entries. No ZIP64, split ZIPs, extraction or password opening. Encrypted entries can be listed only if the directory is readable. Listed paths and sizes come from archive metadata; contents and checksums are not verified. No entry is inflated or written, including paths containing `../`.
+- ZIP listing is capped at 32 MB archives and 2,000 entries. Open stored/deflated entries in memory up to 16 MB per file and 100:1 compression, with checksum validation. No ZIP64, split ZIPs, saving or password opening. Nested ZIPs and Android archive videos use hex. Encrypted entries can be listed only if the directory is readable. Listed paths and sizes come from archive metadata; contents and checksums are not verified. No entry is inflated or written, including paths containing `../`.
 
 - "Any file" means every file opens *somewhere* honest (special viewer, or
   hex + details), not that every format has a rich viewer yet. PDF, SVG,
