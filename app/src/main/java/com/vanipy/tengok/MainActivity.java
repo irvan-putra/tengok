@@ -251,7 +251,7 @@ public class MainActivity extends Activity {
                 "Everything else",
                 "A paged hex view plus the file's details (type, size, SHA-256), so no file is a dead end.",
                 "Not yet, honestly",
-                "PDF, office documents, SVG and archives are on the roadmap; today they open in the hex/details view.",
+                "ZIP files show a read-only list of paths and sizes, up to 32 MB and 2,000 entries. No extraction, password opening, ZIP64 or split ZIPs. PDF, office documents, SVG and other archives still open in the hex/details view.",
         };
         for (int i = 0; i < blocks.length; i += 2) {
             LinearLayout card = Ui.card(this);
