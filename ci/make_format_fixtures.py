@@ -10,7 +10,7 @@ out.mkdir(parents=True, exist_ok=True)
 
 def pdf():
     def page_stream(text, rect):
-        s = "q %s rg 40 600 200 100 re f Q\nBT /F1 28 Tf 40 540 Td (%s) Tj ET\n" % (rect, text)
+        s = "q %s rg 40 600 200 100 re f Q\nBT /F1 18 Tf 30 540 Td (%s) Tj ET\n" % (rect, text)
         return s.encode("latin-1")
 
     objs = []
