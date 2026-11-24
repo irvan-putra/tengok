@@ -108,3 +108,7 @@ CI (`.github/workflows/`):
 
 The debug build's fixture screen (`FixtureActivity`) exists only in
 `app/src/debug`; release APKs never contain it or its synthetic files.
+
+---
+
+Built with AI assistance (Instinct and others). Not everything has been reviewed by Irvan.
