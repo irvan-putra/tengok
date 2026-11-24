@@ -74,4 +74,22 @@ public class SnifferTest {
         assertEquals(Sniffer.Kind.VIDEO, Sniffer.sniff("clip.mkv", null, new byte[4]));
         assertEquals(Sniffer.Kind.VIDEO, Sniffer.sniff("x", "video/mp4", new byte[4]));
     }
+
+    @Test
+    public void pdfSvgAndOffice() {
+        assertEquals(Sniffer.Kind.PDF, Sniffer.sniff("x.bin", null, "%PDF-1.4\n".getBytes()));
+        assertEquals(Sniffer.Kind.PDF, Sniffer.sniff("doc", "application/pdf", new byte[0]));
+        assertEquals(Sniffer.Kind.PDF, Sniffer.sniff("a.pdf", null, new byte[0]));
+        assertEquals(Sniffer.Kind.SVG, Sniffer.sniff("a.svg", "image/svg+xml", new byte[0]));
+        assertEquals(Sniffer.Kind.SVG, Sniffer.sniff("noext", null, "<?xml version=\"1.0\"?>\n<svg xmlns=\"x\"></svg>".getBytes()));
+        assertEquals(Sniffer.Kind.TEXT, Sniffer.sniff("page.html", null, "<html><body><svg></svg></body></html>".getBytes()));
+        byte[] pk = {'P', 'K', 3, 4, 0, 0};
+        assertEquals(Sniffer.Kind.OFFICE, Sniffer.sniff("a.docx", null, pk));
+        assertEquals(Sniffer.Kind.OFFICE, Sniffer.sniff("A.XLSX", null, pk));
+        assertEquals(Sniffer.Kind.OFFICE, Sniffer.sniff("a.pptx", null, pk));
+        assertEquals(Sniffer.Kind.OFFICE, Sniffer.sniff("blob", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", pk));
+        assertEquals(Sniffer.Kind.ZIP, Sniffer.sniff("a.zip", null, pk));
+        // an old .doc (not a ZIP) stays honest: bytes
+        assertEquals(Sniffer.Kind.HEX, Sniffer.sniff("old.doc", null, new byte[]{(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0, 0, 0, 0, 0}));
+    }
 }

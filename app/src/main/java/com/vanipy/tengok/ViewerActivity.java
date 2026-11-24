@@ -41,6 +41,7 @@ public class ViewerActivity extends Activity {
     private MidiPanel midiPanel;
     private AudioPanel audioPanel;
     private VideoPanel videoPanel;
+    private PdfPanel pdfPanel;
     private ConvertPanel convertPanel;
 
     @Override
@@ -172,6 +173,15 @@ public class ViewerActivity extends Activity {
                 videoPanel = new VideoPanel();
                 addWithConvert(videoPanel.build(this, source), k);
                 break;
+            case PDF:
+                showPdf();
+                break;
+            case SVG:
+                content.addView(SvgPanel.build(this, source));
+                break;
+            case OFFICE:
+                showOffice();
+                break;
             case HEX:
             default:
                 content.addView(HexPanel.build(this, source));
@@ -222,6 +232,48 @@ public class ViewerActivity extends Activity {
         // the panel wraps its own viewer cards in a ScrollView; the root must
         // stay viewport-sized so game mode can fill exactly the screen
         content.addView(midiPanel.view());
+    }
+
+    private void showPdf() {
+        if (source.uri() == null && source.localFile() == null) {
+            // A PDF inside a ZIP is only in memory and PdfRenderer needs a seekable file;
+            // tengok does not write temporary copies, so it shows the bytes instead.
+            showError("tengok can't draw a PDF from inside a ZIP", "pdf", new IOException(
+                    "The phone's PDF engine needs a real file and tengok does not write temporary copies. Open the PDF directly, or view its bytes."));
+            return;
+        }
+        pdfPanel = new PdfPanel();
+        try {
+            content.addView(pdfPanel.build(this, source));
+        } catch (IOException | RuntimeException e) {
+            pdfPanel.release();
+            pdfPanel = null;
+            showError("tengok can't show this PDF", "pdf", e);
+        }
+    }
+
+    private void showOffice() {
+        android.widget.ProgressBar loading = new android.widget.ProgressBar(this);
+        content.addView(loading);
+        final Source current = source;
+        new Thread(() -> {
+            try {
+                byte[] data = current.readAll(Source.MAX_BUFFERED_BYTES);
+                OfficeText.Result r = OfficeText.read(data);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed() || kind != Sniffer.Kind.OFFICE || source != current) return;
+                    content.removeAllViews();
+                    content.addView(OfficePanel.build(this, r,
+                            archiveParent == null ? () -> showKind(Sniffer.Kind.ZIP) : null,
+                            () -> showKind(Sniffer.Kind.HEX)));
+                });
+            } catch (IOException | RuntimeException e) {
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed() && kind == Sniffer.Kind.OFFICE && source == current)
+                        showError("tengok can't read this Office file", "office", e);
+                });
+            }
+        }, "office-read").start();
     }
 
     private void showZip() {
@@ -292,7 +344,7 @@ public class ViewerActivity extends Activity {
                     try { head = source.head(8192); } catch (IOException impossible) { return; }
                     Sniffer.Kind target = Sniffer.sniff(entry.name, null, head);
                     // Keep at most one expanded file in memory. Nested ZIPs remain inspectable as bytes.
-                    showKind(target == Sniffer.Kind.ZIP || target == Sniffer.Kind.VIDEO ? Sniffer.Kind.HEX : target);
+                    showKind(target == Sniffer.Kind.ZIP || target == Sniffer.Kind.VIDEO || target == Sniffer.Kind.PDF ? Sniffer.Kind.HEX : target);
                 });
             } catch (IOException e) {
                 runOnUiThread(() -> {
@@ -436,6 +488,10 @@ public class ViewerActivity extends Activity {
     }
 
     private void releasePlayers() {
+        if (pdfPanel != null) {
+            pdfPanel.release();
+            pdfPanel = null;
+        }
         if (midiPanel != null) {
             midiPanel.release();
             midiPanel = null;
