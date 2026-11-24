@@ -160,7 +160,7 @@ public final class PdfPanel {
                 if (released || token != renderToken) return;
                 if (result != null) {
                     // exact pixel size: the bitmap's density must not rescale it past the screen
-                    image.setLayoutParams(new ViewGroup.LayoutParams(result.getWidth(), result.getHeight()));
+                    image.setLayoutParams(new android.widget.FrameLayout.LayoutParams(result.getWidth(), result.getHeight()));
                     image.setImageBitmap(result);
                     Bitmap old = shown;
                     shown = result;
