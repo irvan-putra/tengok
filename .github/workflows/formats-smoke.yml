@@ -1,6 +1,8 @@
 name: Formats smoke (PDF, SVG, Office)
 on:
   workflow_dispatch:
+  push:
+    branches: ["viewers-*"]
 permissions:
   contents: read
 jobs:
