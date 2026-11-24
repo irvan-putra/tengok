@@ -13,7 +13,7 @@ The trusted checksum is GitHub's per-asset digest on each release asset;
 older releases also carry a `.sha256` sidecar, kept but no longer published
 for new releases. Also listed in the [kaji gallery](https://vanipy.com/kaji/apk/).
 
-## What it opens today (v0.7.1)
+## What it opens today (v0.8.0)
 
 | Kind | What you get |
 | --- | --- |
@@ -21,6 +21,9 @@ for new releases. Also listed in the [kaji gallery](https://vanipy.com/kaji/apk/
 | Images (`.png`, `.jpg`, `.webp`, `.gif`, `.bmp`, `.heic`/`.avif` on Android versions that ship those decoders) | Pinch-zoom viewer; animated GIFs play |
 | Audio (`.mp3`, `.ogg`, `.flac`, `.wav`, `.m4a`, `.aac`) | Simple on-device player |
 | Text (`.txt`, `.log`, `.md`, `.json`, `.csv`, source code, and other text) | Monospace reading view, UTF-8 with a Latin-1 fallback |
+| PDF (`.pdf`) | Page by page on Android's own PDF engine, with previous/next and zoom steps. Page images only: no text selection, search, forms or annotations. Password-protected PDFs are refused |
+| SVG (`.svg`) | A basic drawing of shapes, paths and plain text, with pinch zoom and the source one tap away. The screen lists what it skipped (CSS, gradients, filters, clips, images, `<use>`, scripts, which never run) |
+| Word, Excel, PowerPoint (`.docx`, `.xlsx`, `.pptx`) | A text preview read from the file's XML in memory: paragraphs, cell values per sheet, slide text in slide order. No layout, formatting, images, charts or comments |
 | ZIP (`.zip`) | Tap entries to view in memory; paths, sizes and encrypted-entry labels |
 | Everything else | Paged hex view plus a details sheet: declared type, detected type, size, SHA-256 |
 
@@ -33,9 +36,16 @@ music.
 - ZIP listing is capped at 32 MB archives and 2,000 entries. Open stored/deflated entries in memory up to 16 MB per file and 100:1 compression, with checksum validation. No ZIP64, split ZIPs, saving or password opening. Nested ZIPs and Android archive videos use hex. Encrypted entries can be listed only if the directory is readable. Listed paths and sizes come from archive metadata; contents and checksums are not verified. No entry is inflated or written, including paths containing `../`.
 
 - "Any file" means every file opens *somewhere* honest (special viewer, or
-  hex + details), not that every format has a rich viewer yet. PDF, SVG,
-  office documents and non-ZIP archives are not built yet; those files open
-  in the hex/details view today. Video plays: mp4/mkv/webm/mov/3gp use the
+  hex + details), not that every format has a rich viewer yet. Older
+  `.doc`/`.xls`/`.ppt`, OpenDocument files and non-ZIP archives are not built
+  yet; those files open in the hex/details view today.
+- PDF, SVG and Office previews (new in 0.8.0) are basic by design. A PDF
+  inside a ZIP opens as bytes, because the phone's PDF engine needs a real
+  file and tengok writes no temporary copies. SVG preview reads up to 2 MB
+  and refuses files that declare XML entities. Office previews use the ZIP
+  limits above (32 MB file, 16 MB per part), show at most 600,000 characters
+  and 2,000 rows by 100 columns per sheet, and show dates as serial numbers.
+  The new viewers are Android only; the web version does not have them yet. Video plays: mp4/mkv/webm/mov/3gp use the
   phone's own decoders, and variable frame-rate recordings (like Bidik's
   screen captures, whose frames carry wall-clock timestamps and whose index
   sits at the end of the file) play at the speed they were recorded.
@@ -52,8 +62,8 @@ music.
 - Defensive parsing: every viewer treats its input as hostile; corrupt or
   truncated files get a readable error and an offer of the hex view. Unit
   tests feed the parsers corrupt and adversarial bytes.
-- Plain Java, no third-party runtime dependencies, no home-grown
-  cryptography (SHA-256 is the platform's `MessageDigest`).
+- Plain Java; Media3 (conversions) is the only runtime library and the PDF, SVG and
+  Office previews add none; no home-grown cryptography (SHA-256 is the platform's `MessageDigest`).
 
 ## Web version
 

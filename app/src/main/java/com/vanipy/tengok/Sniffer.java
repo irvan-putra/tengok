@@ -10,14 +10,16 @@ import java.util.Locale;
  */
 public final class Sniffer {
 
-    public enum Kind {MIDI, IMAGE, AUDIO, VIDEO, ZIP, TEXT, HEX}
+    public enum Kind {MIDI, IMAGE, AUDIO, VIDEO, ZIP, PDF, SVG, OFFICE, TEXT, HEX}
 
     private Sniffer() {
     }
 
     public static Kind sniff(String name, String declaredMime, byte[] head) {
         Kind byMagic = byMagic(head);
+        if (byMagic == Kind.ZIP && isOfficeName(name, declaredMime)) return Kind.OFFICE;
         if (byMagic != null) return byMagic;
+        if (isSvgName(name, declaredMime) || headLooksSvg(head)) return Kind.SVG;
         Kind byMime = byMime(declaredMime);
         if (byMime != null) return byMime;
         Kind byExt = byExtension(name);
@@ -27,6 +29,7 @@ public final class Sniffer {
 
     static Kind byMagic(byte[] h) {
         if (h == null || h.length < 4) return null;
+        if (h[0] == '%' && h[1] == 'P' && h[2] == 'D' && h[3] == 'F') return Kind.PDF;
         if (h[0] == 'P' && h[1] == 'K' && ((h[2] == 3 && h[3] == 4) || (h[2] == 5 && h[3] == 6) || (h[2] == 7 && h[3] == 8))) return Kind.ZIP;
         if (h[0] == 'M' && h[1] == 'T' && h[2] == 'h' && h[3] == 'd') return Kind.MIDI;
         if ((h[0] & 0xFF) == 0x89 && h[1] == 'P' && h[2] == 'N' && h[3] == 'G') return Kind.IMAGE;
@@ -59,6 +62,7 @@ public final class Sniffer {
         String m = mime.toLowerCase(Locale.ROOT);
         if (m.equals("audio/midi") || m.equals("audio/x-midi") || m.equals("audio/mid")
                 || m.equals("application/x-midi")) return Kind.MIDI;
+        if (m.equals("application/pdf")) return Kind.PDF;
         if (m.equals("application/zip") || m.equals("application/x-zip-compressed")) return Kind.ZIP;
         if (m.startsWith("image/")) return Kind.IMAGE;
         if (m.equals("audio/mpeg") || m.equals("audio/mp4") || m.equals("audio/ogg")
@@ -77,6 +81,15 @@ public final class Sniffer {
         String e = name.substring(dot + 1).toLowerCase(Locale.ROOT);
         switch (e) {
             case "zip": return Kind.ZIP;
+            case "pdf": return Kind.PDF;
+            case "svg": return Kind.SVG;
+            case "docx":
+            case "docm":
+            case "xlsx":
+            case "xlsm":
+            case "pptx":
+            case "pptm":
+                return Kind.OFFICE;
             case "mid":
             case "midi":
             case "rmi":
@@ -144,6 +157,30 @@ public final class Sniffer {
             default:
                 return null;
         }
+    }
+
+    /** A ZIP container that Office Open XML names (.docx, .xlsx, .pptx) or its MIME type claims. */
+    static boolean isOfficeName(String name, String mime) {
+        if (mime != null && mime.toLowerCase(Locale.ROOT).contains("officedocument")) return true;
+        return byExtension(name) == Kind.OFFICE;
+    }
+
+    static boolean isSvgName(String name, String mime) {
+        if (mime != null && mime.toLowerCase(Locale.ROOT).startsWith("image/svg")) return true;
+        return byExtension(name) == Kind.SVG;
+    }
+
+    /** Text that opens with markup and has an svg element before any html element. */
+    static boolean headLooksSvg(byte[] h) {
+        if (h == null || h.length < 5 || !looksLikeText(h)) return false;
+        String t = new String(h, 0, Math.min(h.length, 4096), java.nio.charset.StandardCharsets.ISO_8859_1)
+                .toLowerCase(Locale.ROOT).trim();
+        if (t.startsWith("\u00ef\u00bb\u00bf")) t = t.substring(3).trim();
+        if (!t.startsWith("<")) return false;
+        int svg = t.indexOf("<svg");
+        if (svg < 0) return false;
+        int html = t.indexOf("<html");
+        return html < 0 || svg < html;
     }
 
     /** Bytes with no NULs and almost all printable / whitespace are shown as text. */
