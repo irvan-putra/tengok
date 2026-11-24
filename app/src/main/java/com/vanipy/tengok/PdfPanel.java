@@ -90,7 +90,7 @@ public final class PdfPanel {
 
         image = new ImageView(context);
         image.setBackgroundColor(Color.WHITE);
-        image.setAdjustViewBounds(true);
+        image.setScaleType(ImageView.ScaleType.FIT_XY);
         image.setContentDescription("PDF page");
         HorizontalScrollView h = new HorizontalScrollView(context);
         h.addView(image);
@@ -159,6 +159,8 @@ public final class PdfPanel {
             image.post(() -> {
                 if (released || token != renderToken) return;
                 if (result != null) {
+                    // exact pixel size: the bitmap's density must not rescale it past the screen
+                    image.setLayoutParams(new ViewGroup.LayoutParams(result.getWidth(), result.getHeight()));
                     image.setImageBitmap(result);
                     Bitmap old = shown;
                     shown = result;
