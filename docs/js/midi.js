@@ -286,6 +286,19 @@ class MidiFile {
         this.tempos.push(t);
       }
     }
+    // Build the cumulative tempo->seconds map ONCE (O(tempos)) instead of
+    // letting every tickToSeconds call rescan the whole tempo list
+    // (which made this finishTiming O(notes x tempos)).
+    this._tempoMap = [];
+    {
+      let sec = 0, prevTick = 0, us = 500000;
+      for (const t of this.tempos) {
+        sec += (t.tick - prevTick) * (us / 1000000.0) / this.ticksPerQuarter;
+        this._tempoMap.push({ tick: t.tick, sec: sec, usPerQuarter: t.usPerQuarter });
+        prevTick = t.tick;
+        us = t.usPerQuarter;
+      }
+    }
     for (const n of this.notes) {
       n.startSec = this.tickToSeconds(n.startTick);
       n.endSec = this.tickToSeconds(n.endTick);
@@ -295,6 +308,20 @@ class MidiFile {
 
   tickToSeconds(tick) {
     if (this.smpte) return tick / this.smpteTicksPerSecond;
+    const map = this._tempoMap;
+    if (map && map.length) {
+      // rightmost entry with entry.tick < tick (an event AT the tick does not
+      // contribute its segment, same as the original loop's break condition)
+      let ans = -1, lo = 0, hi = map.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (map[mid].tick < tick) { ans = mid; lo = mid + 1; } else { hi = mid - 1; }
+      }
+      if (ans < 0) return (tick * (500000 / 1000000.0)) / this.ticksPerQuarter;
+      const e = map[ans];
+      return e.sec + (tick - e.tick) * (e.usPerQuarter / 1000000.0) / this.ticksPerQuarter;
+    }
+    // fallback for calls before finishTiming(): original linear scan
     let sec = 0;
     let prevTick = 0;
     let us = 500000;
